@@ -270,7 +270,7 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
-      // HANDLE RESET DARI TOMBOL GARIS START
+      // 1. HANDLE RESET DARI TOMBOL GARIS START
       if (data.cmd === "RACE_RESET") {
         currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0; totalDistKm = 0; lapStartDistKm = 0;
         lapArchive = {}; currentLapCoords = []; currentLapStarters = []; bestLapSec = Infinity;
@@ -283,14 +283,23 @@
         
         if (data.start_lat && data.start_lon) {
           startLat = parseFloat(data.start_lat); startLon = parseFloat(data.start_lon); startLocked = true;
-          L.circle([startLat, startLon], { radius: GATE_RADIUS_M, color: '#22c55e', fillOpacity: 0.3 }).addTo(liveMap);
+          L.circle([startLat, startLon], { 
+            radius: GATE_RADIUS_M, 
+            color: '#22c55e', 
+            weight: 2, 
+            dashArray: '6, 6', 
+            fillColor: '#22c55e', 
+            fillOpacity: 0.15 
+          }).addTo(liveMap).bindPopup("Garis Start / Finish");
         }
         clearInterval(timerInterval); timerRunning = false; startTimer();
         return;
       }
 
-      // HANDLE DATA NORMAL
-      const spd = parseFloat(data.spd) || 0; const lat = parseFloat(data.lat) || 0; const lon = parseFloat(data.lon) || 0;
+      // 2. HANDLE DATA NORMAL
+      const spd = parseFloat(data.spd) || 0; 
+      const lat = parseFloat(data.lat) || 0; 
+      const lon = parseFloat(data.lon) || 0;
       totalDistKm = parseFloat(data.trip) || totalDistKm;
       
       document.getElementById('dispSpeed').innerHTML = `${spd.toFixed(1)}<span class="unit">km/h</span>`;
@@ -304,7 +313,7 @@
         aEl.style.color = avg >= 25.0 ? 'var(--success)' : 'var(--danger)';
       }
 
-      // LOGIKA DURASI ENGINE BURN
+      // 3. LOGIKA DURASI ENGINE BURN
       if (engineState === "COASTING" && spd > 19.0) {
         engineState = "BURNING"; burnStartTimer = Date.now(); maxBurnSpd = spd;
         burnStartLat = lat; burnStartLon = lon; burnStartSpd = spd;
@@ -317,27 +326,31 @@
         }
       }
 
-      // TRACKING & GEOFENCE PETA
+      // 4. TRACKING & GEOFENCE PETA
       if (lat !== 0 && lon !== 0) {
         const pos = [lat, lon];
         carMarker.setLatLng(pos); livePolyline.addLatLng(pos); liveMap.panTo(pos);
         currentLapCoords.push(pos);
 
-       if (!startLocked && spd > 5.0) {
+        // Kunci garis start otomatis jika belum direset via tombol
+        if (!startLocked && spd > 5.0) {
           startLat = lat; startLon = lon; startLocked = true;
           L.circle([startLat, startLon], { 
             radius: GATE_RADIUS_M, 
-            color: '#22c55e',
-            weight: 2,
-            dashArray: '6, 6',
+            color: '#22c55e', 
+            weight: 2, 
+            dashArray: '6, 6', 
             fillColor: '#22c55e', 
-            fillOpacity: 0.15
+            fillOpacity: 0.15 
           }).addTo(liveMap).bindPopup("Garis Start / Finish");
-          // <--- DI SINI HILANG TANDA KURUNG PENUTUP "}"
+        } // <--- KURUNG TUTUP SUDAH DIPERBAIKI DI SINI
+
+        // Deteksi mobil melewati garis finish
         if (startLocked) {
           const dist = getDist(lat, lon, startLat, startLon);
           if (dist <= GATE_RADIUS_M && (Date.now() - lastLapTimestamp > LAP_COOLDOWN_MS)) {
-            lastLapTimestamp = Date.now(); finishLap();
+            lastLapTimestamp = Date.now(); 
+            finishLap();
           }
         }
       }
