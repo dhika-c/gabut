@@ -267,7 +267,7 @@
     // ==========================================
     // 3. MQTT INGESTION & DATA LOGIC
     // ==========================================
-    const broker = "broker.hivemq.com", port = 8000, topic = "kmhe2026/proto/telemetri";
+    const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
       // HANDLE RESET DARI TOMBOL GARIS START
@@ -337,10 +337,39 @@
       }
     }
 
-    const client = new Paho.MQTT.Client(broker, port, "dash_" + Math.random().toString(16).substr(2,6));
-    client.onConnectionLost = () => { document.getElementById('connStatus').className = "status-badge disconnected"; document.getElementById('connStatus').innerText = "DISCONNECTED"; setTimeout(connect, 3000); };
-    client.onMessageArrived = (m) => { try { processTelemetry(JSON.parse(m.payloadString)); } catch (e) {} };
-    function connect() { client.connect({ onSuccess: () => { document.getElementById('connStatus').className = "status-badge connected"; document.getElementById('connStatus').innerText = "LIVE PADDOCK"; client.subscribe(topic); }, onFailure: () => setTimeout(connect, 3000) }); }
+    const client = new Paho.MQTT.Client(broker, Number(port), "dash_" + Math.random().toString(16).substr(2,6));
+    
+    client.onConnectionLost = () => { 
+      document.getElementById('connStatus').className = "status-badge disconnected"; 
+      document.getElementById('connStatus').innerText = "DISCONNECTED"; 
+      setTimeout(connect, 3000); 
+    };
+    
+    client.onMessageArrived = (m) => { 
+      try { 
+        processTelemetry(JSON.parse(m.payloadString)); 
+      } catch (e) {
+        console.error("Format data salah:", e);
+      } 
+    };
+
+    function connect() { 
+      client.connect({ 
+        useSSL: true, // Wajib true agar HTTPS GitHub Pages tidak memblokir koneksi
+        timeout: 5,
+        onSuccess: () => { 
+          document.getElementById('connStatus').className = "status-badge connected"; 
+          document.getElementById('connStatus').innerText = "LIVE PADDOCK"; 
+          client.subscribe(topic); 
+        }, 
+        onFailure: () => {
+          document.getElementById('connStatus').className = "status-badge disconnected";
+          document.getElementById('connStatus').innerText = "RECONNECTING...";
+          setTimeout(connect, 3000);
+        }
+      }); 
+    }
+
     connect();
   </script>
 </body>
