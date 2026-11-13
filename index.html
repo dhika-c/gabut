@@ -96,15 +96,15 @@
 
   <!-- Metrik Top (9 Kartu termasuk Baterai Engine 12V & Baterai Alat) -->
   <div class="grid-metrics">
-    <div class="card"><h4>Kecepatan</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
+    <div class="card"><h4>speed</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
     <div class="card"><h4>Avg Pace</h4><div class="val" id="dispAvgSpeed" style="color: var(--success);">0.0<span class="unit">km/h</span></div></div>
-    <div class="card"><h4>Jarak Total</h4><div class="val" id="dispTrip">0.00<span class="unit">km</span></div></div>
+    <div class="card"><h4>Distance</h4><div class="val" id="dispTrip">0.00<span class="unit">km</span></div></div>
     <div class="card"><h4>Total Stater</h4><div class="val" id="dispStarter" style="color: var(--warning);">0</div></div>
-    <div class="card"><h4>Durasi Burn Akhir</h4><div class="val" id="dispBurnDur" style="color: var(--warning);">0.0<span class="unit">s</span></div></div>
-    <div class="card"><h4>Waktu Balap</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
-    <div class="card"><h4>Lap Berjalan</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
-    <div class="card"><h4>Baterai Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
-    <div class="card"><h4>Baterai Alat</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
+    <div class="card"><h4></h4>Engin Runtime<div class="val" id="dispBurnDur" style="color: var(--warning);">0.0<span class="unit">s</span></div></div>
+    <div class="card"><h4>Race Time</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
+    <div class="card"><h4>Current lap</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
+    <div class="card"><h4>Batt Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
+    <div class="card"><h4>Batt Telemetry</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
   </div>
 
   <div class="main-layout">
@@ -114,14 +114,14 @@
         <span id="panelTitle">FOLDER DATA RACE</span>
         <div class="header-actions">
           <span id="bestLapText" style="color: var(--purple); font-size: 0.78rem;">BEST: --:--</span>
-          <button id="btnClearAll" class="btn-sm btn-danger" onclick="clearAllFolders()">HAPUS</button>
+          <button id="btnClearAll" class="btn-sm btn-danger" onclick="clearAllFolders()">CLEAR</button>
         </div>
       </div>
 
       <!-- Bar Navigasi Saat Membuka Folder -->
       <div id="folderBreadcrumb" class="folder-breadcrumb" style="display: none;">
         <button class="btn-sm" onclick="closeFolder()">← FOLDER</button>
-        <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">SESI BERJALAN</span>
+        <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">LIVE SESSION</span>
       </div>
 
       <div id="lapList" class="lap-list"></div>
@@ -136,7 +136,7 @@
           <h3 id="mTitle" style="color: var(--accent);">ANALISIS SPASIAL LAP #1</h3>
           <p style="font-size: 0.75rem; color: var(--muted);">Peta jalur dan profil titik stater (Burn)</p>
         </div>
-        <button class="close-btn" onclick="closeModal()">TUTUP ✕</button>
+        <button class="close-btn" onclick="closeModal()">CLOSE ✕</button>
       </div>
       <div id="modalMap"></div>
       <div class="modal-stats-grid">
