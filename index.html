@@ -41,12 +41,26 @@
 
     #liveMap { height: 540px; width: 100%; border-radius: 10px; border: 1px solid #334155; }
 
-    /* Riwayat Lap */
+    /* Panel Riwayat & Folder */
     .lap-feed { background: var(--card); border-radius: 10px; border: 1px solid #334155; padding: 15px; height: 540px; display: flex; flex-direction: column; }
-    .lap-feed-header { font-size: 0.9rem; font-weight: bold; color: var(--accent); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 12px; }
-    .clear-hist-btn { background: #334155; color: var(--muted); border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.7rem; cursor: pointer; }
-    .clear-hist-btn:hover { background: var(--danger); color: #fff; }
-    .lap-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .lap-feed-header { font-size: 0.9rem; font-weight: bold; color: var(--accent); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 10px; }
+    .header-actions { display: flex; align-items: center; gap: 6px; }
+    .btn-sm { background: #334155; color: var(--text); border: none; border-radius: 4px; padding: 4px 8px; font-size: 0.7rem; font-weight: bold; cursor: pointer; transition: 0.15s; }
+    .btn-sm:hover { background: var(--accent); color: #000; }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+
+    .folder-breadcrumb { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 0.78rem; }
+    .lap-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; padding-right: 2px; }
+
+    /* Kartu Folder */
+    .folder-card { background: #0f172a; border: 1px solid #334155; border-left: 4px solid var(--accent); border-radius: 8px; padding: 11px 12px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
+    .folder-card:hover { background: var(--hover); border-color: var(--accent); transform: translateX(3px); }
+    .folder-card.active-session { border-left-color: var(--success); background: rgba(34, 197, 94, 0.08); }
+    .folder-title { font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; }
+    .folder-sub { font-size: 0.72rem; color: var(--muted); display: block; margin-top: 3px; }
+    .folder-badge { background: #1e293b; border: 1px solid #475569; color: var(--accent); font-size: 0.75rem; font-weight: bold; padding: 3px 8px; border-radius: 12px; white-space: nowrap; }
+
+    /* Kartu Lap di dalam Folder */
     .lap-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
     .lap-card:hover { background: var(--hover); border-color: var(--accent); transform: translateX(4px); }
     .lap-card.best { border-left: 4px solid var(--purple); }
@@ -96,15 +110,20 @@
     <div id="liveMap"></div>
     <div class="lap-feed">
       <div class="lap-feed-header">
-        <span>RIWAYAT PUTARAN</span>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span id="bestLapText" style="color: var(--purple);">BEST: --:--</span>
-          <button class="clear-hist-btn" onclick="clearHistoryStorage()">HAPUS</button>
+        <span id="panelTitle">FOLDER DATA RACE</span>
+        <div class="header-actions">
+          <span id="bestLapText" style="color: var(--purple); font-size: 0.78rem;">BEST: --:--</span>
+          <button id="btnClearAll" class="btn-sm btn-danger" onclick="clearAllFolders()">HAPUS</button>
         </div>
       </div>
-      <div id="lapList" class="lap-list">
-        <p id="noLapText" style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Menunggu mobil menyelesaikan Lap 1...</p>
+
+      <!-- Bar Navigasi Saat Membuka Folder -->
+      <div id="folderBreadcrumb" class="folder-breadcrumb" style="display: none;">
+        <button class="btn-sm" onclick="closeFolder()">← FOLDER</button>
+        <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">SESI BERJALAN</span>
       </div>
+
+      <div id="lapList" class="lap-list"></div>
     </div>
   </div>
 
@@ -153,7 +172,7 @@
     }
 
     // ==========================================
-    // 2. LOGIKA KMHE & PENYIMPANAN HISTORY
+    // 2. LOGIKA KMHE & SISTEM FOLDER PER RACE
     // ==========================================
     let currentLap = 1, globalStarterCount = 0;
     let timerSec = 0;
@@ -169,10 +188,14 @@
     const LAP_COOLDOWN_MS = 25000;
     const GATE_RADIUS_M = 20;
 
-    // Muat arsip lap dari localStorage agar tidak hilang saat refresh/reset
-    let lapHistoryList = JSON.parse(localStorage.getItem("vora_lap_history") || "[]");
+    // Penyimpanan Folder Race (Tersimpan Permanen di Browser)
+    let raceFolders = JSON.parse(localStorage.getItem("vora_race_folders") || "[]");
+    let activeSessionLaps = []; // Menyimpan Lap 1, Lap 2, Lap 3... pada race yang sedang berlangsung
     let currentLapCoords = [];
     let currentLapStarters = [];
+
+    // Status Navigasi Folder: null = Tampilan Daftar Folder, "ACTIVE" = Folder Sesi Aktif, number = Index Folder Arsip
+    let openedFolder = "ACTIVE";
 
     const formatTime = (sec) => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
     function getDist(lat1, lon1, lat2, lon2) {
@@ -181,48 +204,133 @@
       return R * 2 * Math.asin(Math.sqrt(a));
     }
 
-    function renderSavedHistory() {
+    function openFolder(target) {
+      openedFolder = target;
+      renderHistoryPanel();
+    }
+
+    function closeFolder() {
+      openedFolder = null;
+      renderHistoryPanel();
+    }
+
+    function deleteSingleFolder(event, idx) {
+      event.stopPropagation();
+      if (confirm(`Hapus folder "${raceFolders[idx].name}"?`)) {
+        raceFolders.splice(idx, 1);
+        localStorage.setItem("vora_race_folders", JSON.stringify(raceFolders));
+        renderHistoryPanel();
+      }
+    }
+
+    function clearAllFolders() {
+      if (confirm("Hapus semua folder riwayat race tersimpan?")) {
+        raceFolders = [];
+        localStorage.removeItem("vora_race_folders");
+        if (typeof openedFolder === "number") openedFolder = null;
+        renderHistoryPanel();
+      }
+    }
+
+    function renderHistoryPanel() {
       const list = document.getElementById('lapList');
-      if (lapHistoryList.length === 0) {
-        list.innerHTML = '<p id="noLapText" style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Menunggu mobil menyelesaikan Lap 1...</p>';
-        document.getElementById('bestLapText').innerText = "BEST: --:--";
+      const breadcrumb = document.getElementById('folderBreadcrumb');
+      const folderNameEl = document.getElementById('openedFolderName');
+      const panelTitle = document.getElementById('panelTitle');
+      const bestText = document.getElementById('bestLapText');
+
+      // MODE 1: TAMPILAN DAFTAR FOLDER (ROOT)
+      if (openedFolder === null) {
+        breadcrumb.style.display = "none";
+        panelTitle.innerText = `FOLDER RACE (${raceFolders.length})`;
+        bestText.innerText = "";
+        list.innerHTML = "";
+
+        // Tampilkan pintasan ke Sesi Aktif di paling atas jika sedang berjalan
+        if (activeSessionLaps.length > 0 || timerSec > 0) {
+          const activeCard = document.createElement('div');
+          activeCard.className = "folder-card active-session";
+          activeCard.onclick = () => openFolder("ACTIVE");
+          activeCard.innerHTML = `
+            <div>
+              <span class="folder-title">🟢 SESI BERJALAN</span>
+              <span class="folder-sub">${activeSessionLaps.length} Lap selesai • ${totalDistKm.toFixed(2)} km</span>
+            </div>
+            <span class="folder-badge" style="color: var(--success); border-color: var(--success);">BUKA ▸</span>`;
+          list.appendChild(activeCard);
+        }
+
+        if (raceFolders.length === 0 && activeSessionLaps.length === 0 && timerSec === 0) {
+          list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Belum ada folder race.<br>Hasil race otomatis menjadi 1 folder setelah alat di-reset.</p>';
+          return;
+        }
+
+        raceFolders.forEach((folder, idx) => {
+          const card = document.createElement('div');
+          card.className = "folder-card";
+          card.onclick = () => openFolder(idx);
+          card.innerHTML = `
+            <div>
+              <span class="folder-title">📁 ${folder.name}</span>
+              <span class="folder-sub">${folder.dateStr} • ${folder.totalDist.toFixed(2)} km • Best ${folder.bestStr}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="folder-badge">${folder.laps.length} LAP</span>
+              <button class="btn-sm btn-danger" onclick="deleteSingleFolder(event, ${idx})" title="Hapus Folder">✕</button>
+            </div>`;
+          list.appendChild(card);
+        });
+        return;
+      }
+
+      // MODE 2: TAMPILAN ISI FOLDER (LIST LAP 1, LAP 2, LAP 3...)
+      breadcrumb.style.display = "flex";
+      panelTitle.innerText = "RIWAYAT PUTARAN";
+
+      let targetLaps = [];
+      let folderBestStr = "--:--";
+
+      if (openedFolder === "ACTIVE") {
+        folderNameEl.innerText = "🟢 SESI BERJALAN";
+        targetLaps = activeSessionLaps;
+        folderBestStr = bestLapSec !== Infinity ? formatTime(bestLapSec) : "--:--";
+      } else if (raceFolders[openedFolder]) {
+        const f = raceFolders[openedFolder];
+        folderNameEl.innerText = `📁 ${f.name} (${f.laps.length} Lap)`;
+        targetLaps = f.laps;
+        folderBestStr = f.bestStr;
+      } else {
+        openedFolder = null;
+        renderHistoryPanel();
+        return;
+      }
+
+      bestText.innerText = `BEST: ${folderBestStr}`;
+
+      if (targetLaps.length === 0) {
+        list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Menunggu mobil menyelesaikan Lap 1...</p>';
         return;
       }
 
       list.innerHTML = "";
-      bestLapSec = Infinity;
-
-      lapHistoryList.forEach((data, index) => {
-        if (data.durSec > 0 && data.durSec < bestLapSec && !data.isSession) {
-          bestLapSec = data.durSec;
-        }
+      // Tampilkan berurutan Lap 1, Lap 2, Lap 3...
+      targetLaps.forEach((data, lapIdx) => {
         const card = document.createElement('div');
         card.className = `lap-card ${data.best ? 'best' : ''}`;
-        card.onclick = () => openModal(index);
+        card.onclick = () => openModal(lapIdx);
         card.innerHTML = `
           <div class="lap-card-left">
-            <span class="lap-title">${data.label} ${data.best ? '★' : ''}</span>
+            <span class="lap-title">LAP #${data.lap} ${data.best ? '★' : ''}</span>
             <span class="lap-sub">${data.avgSpd} km/h • ${(data.distM/1000).toFixed(2)} km • ${data.starts} Stater</span>
           </div>
           <div class="lap-time">${data.timeStr}</div>`;
         list.appendChild(card);
       });
-
-      if (bestLapSec !== Infinity) {
-        document.getElementById('bestLapText').innerText = `BEST: ${formatTime(bestLapSec)}`;
-      }
     }
 
-    function clearHistoryStorage() {
-      if (confirm("Hapus semua riwayat putaran tersimpan?")) {
-        lapHistoryList = [];
-        localStorage.removeItem("vora_lap_history");
-        renderSavedHistory();
-      }
-    }
-
-    // Panggil saat halaman web pertama kali dimuat
-    renderSavedHistory();
+    // Jika sudah ada folder tersimpan saat web baru dibuka, tampilkan daftar foldernya
+    if (raceFolders.length > 0) openedFolder = null;
+    renderHistoryPanel();
 
     function recordStarterFinished() {
       globalStarterCount++;
@@ -243,24 +351,25 @@
         .bindPopup(`<b>Stater #${idxInLap}</b><br>Akselerasi: ${burnStartSpd.toFixed(1)} ➔ ${maxBurnSpd.toFixed(1)} km/h<br><b>Mesin Nyala: ${duration.toFixed(1)} s</b>`);
     }
 
-    function saveLapRecord(isManualReset = false) {
+    function finishLap() {
       const lapDurSec = timerSec - lapStartSec;
-      const lapDist = (totalDistKm - lapStartDistKm) * 1000;
-      if (lapDurSec <= 0 && lapDist < 10) return; // Abaikan jika belum bergerak sama sekali
-
       lapStartSec = timerSec;
+      const lapDist = (totalDistKm - lapStartDistKm) * 1000;
       lapStartDistKm = totalDistKm;
       const lapAvg = lapDurSec > 0 ? (lapDist / 1000) / (lapDurSec / 3600) : 0;
       
-      const isBest = !isManualReset && (lapDurSec < bestLapSec);
-      if (isBest) bestLapSec = lapDurSec;
+      const isBest = lapDurSec > 0 && lapDurSec < bestLapSec;
+      if (isBest) {
+        bestLapSec = lapDurSec;
+        // Hapus tanda best pada lap sebelumnya di sesi aktif
+        activeSessionLaps.forEach(l => l.best = false);
+      }
 
       let totalEngSec = 0;
       currentLapStarters.forEach(s => totalEngSec += s.dur);
 
-      const record = {
-        label: isManualReset ? `RUN (${new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})})` : `LAP #${currentLap}`,
-        isSession: isManualReset,
+      activeSessionLaps.push({
+        lap: currentLap,
         durSec: lapDurSec,
         timeStr: formatTime(lapDurSec),
         avgSpd: lapAvg.toFixed(1),
@@ -270,15 +379,12 @@
         coords: [...currentLapCoords],
         starters: [...currentLapStarters],
         best: isBest
-      };
+      });
 
-      lapHistoryList.unshift(record);
-      localStorage.setItem("vora_lap_history", JSON.stringify(lapHistoryList));
-      renderSavedHistory();
-    }
+      // Otomatis tampilkan isi sesi aktif agar tim paddock bisa memantau Lap 1, 2, 3...
+      openedFolder = "ACTIVE";
+      renderHistoryPanel();
 
-    function finishLap() {
-      saveLapRecord(false);
       liveStarterGroup.clearLayers();
       currentLapCoords = [];
       currentLapStarters = [];
@@ -286,12 +392,56 @@
       document.getElementById('dispLap').innerText = currentLap;
     }
 
-    // Modal
-    function openModal(index) {
+    function archiveCurrentRaceToFolder() {
+      // Jika belum ada lap selesai tapi mobil sudah jalan/timer berjalan, jadikan Lap #1 agar data tidak hilang
+      if (activeSessionLaps.length === 0 && (timerSec > 0 || totalDistKm > 0.01)) {
+        const avg = timerSec > 0 ? totalDistKm / (timerSec / 3600) : 0;
+        let totalEngSec = 0;
+        currentLapStarters.forEach(s => totalEngSec += s.dur);
+        bestLapSec = timerSec;
+
+        activeSessionLaps.push({
+          lap: 1,
+          durSec: timerSec,
+          timeStr: formatTime(timerSec),
+          avgSpd: avg.toFixed(1),
+          starts: currentLapStarters.length,
+          engTime: totalEngSec.toFixed(1),
+          distM: Math.round(totalDistKm * 1000),
+          coords: [...currentLapCoords],
+          starters: [...currentLapStarters],
+          best: true
+        });
+      }
+
+      if (activeSessionLaps.length === 0) return;
+
+      const raceNumber = raceFolders.length + 1;
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' +
+                      now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+      const newFolder = {
+        name: `RACE #${raceNumber}`,
+        dateStr: dateStr,
+        totalDist: totalDistKm,
+        bestStr: bestLapSec !== Infinity ? formatTime(bestLapSec) : "--:--",
+        laps: [...activeSessionLaps]
+      };
+
+      raceFolders.unshift(newFolder);
+      localStorage.setItem("vora_race_folders", JSON.stringify(raceFolders));
+    }
+
+    // Modal Inspector (Membaca dari folder yang sedang dibuka)
+    function openModal(lapIdx) {
       initModal();
-      const d = lapHistoryList[index];
+      const sourceLaps = (openedFolder === "ACTIVE") ? activeSessionLaps : (raceFolders[openedFolder]?.laps || []);
+      const d = sourceLaps[lapIdx];
       if (!d) return;
-      document.getElementById('mTitle').innerText = `ANALISIS SPASIAL - ${d.label}`;
+
+      const folderLabel = (openedFolder === "ACTIVE") ? "SESI AKTIF" : raceFolders[openedFolder].name;
+      document.getElementById('mTitle').innerText = `${folderLabel} — LAP #${d.lap}`;
       document.getElementById('mTime').innerText = d.timeStr;
       document.getElementById('mAvg').innerText = `${d.avgSpd} km/h`;
       document.getElementById('mStarts').innerText = d.starts;
@@ -315,11 +465,14 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
-      // 1. HANDLE RESET DARI ALAT (Simpan sesi terakhir ke History, JANGAN hapus riwayat lama)
+      // 1. HANDLE RESET DARI ALAT -> BUNGKUS RACE SEBELUMNYA JADI 1 FOLDER
       if (data.cmd === "RACE_RESET") {
-        saveLapRecord(true);
+        archiveCurrentRaceToFolder();
 
-        currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0; totalDistKm = 0; lapStartDistKm = 0;
+        // Reset variabel sesi aktif untuk race berikutnya
+        activeSessionLaps = [];
+        currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0;
+        totalDistKm = 0; lapStartDistKm = 0; bestLapSec = Infinity;
         currentLapCoords = []; currentLapStarters = [];
         
         document.getElementById('dispSpeed').innerHTML = `0.0<span class="unit">km/h</span>`;
@@ -337,6 +490,10 @@
         livePolyline.setLatLngs([]);
         if (startCircle) { liveMap.removeLayer(startCircle); startCircle = null; }
         startLocked = false;
+
+        // Kembali ke tampilan daftar folder agar folder baru langsung terlihat rapi
+        openedFolder = null;
+        renderHistoryPanel();
         
         if (data.start_lat && data.start_lon) {
           startLat = parseFloat(data.start_lat); startLon = parseFloat(data.start_lon); startLocked = true;
@@ -347,12 +504,11 @@
         return;
       }
 
-      // 2. SINKRONISASI TIMER LANGSUNG DARI ESP32 (Berhenti otomatis saat alat STOP)
+      // 2. SINKRONISASI TIMER LANGSUNG DARI ESP32
       if (data.time !== undefined) {
         timerSec = parseInt(data.time) || 0;
         const timerEl = document.getElementById('dispTimer');
         timerEl.innerText = formatTime(timerSec);
-        // Warna merah jika status alat STOP (t_state === 2), oranye jika RUN (1), biru jika READY (0)
         if (data.t_state === 2) timerEl.style.color = "var(--danger)";
         else if (data.t_state === 1) timerEl.style.color = "var(--warning)";
         else timerEl.style.color = "var(--accent)";
@@ -410,7 +566,6 @@
       }
     }
 
-    // Sertakan path "/mqtt" sesuai standar WebSocket HiveMQ
     const client = new Paho.MQTT.Client(broker, Number(port), "/mqtt", "dash_" + Math.random().toString(16).substr(2,6));
     
     client.onConnectionLost = () => { 
