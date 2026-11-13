@@ -28,11 +28,11 @@
 
     /* Metrik Atas */
     .grid-metrics {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 10px; margin-bottom: 15px;
     }
-    .card { background: var(--card); padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
+    .card { background: var(--card); padding: 10px 12px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
     .card h4 { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
-    .card .val { font-size: 1.6rem; font-weight: 800; color: var(--accent); }
+    .card .val { font-size: 1.55rem; font-weight: 800; color: var(--accent); }
     .card .unit { font-size: 0.75rem; color: var(--muted); margin-left: 2px; }
 
     /* Layout Utama */
@@ -94,7 +94,7 @@
     <div id="connStatus" class="status-badge disconnected">DISCONNECTED</div>
   </header>
 
-  <!-- Metrik Top -->
+  <!-- Metrik Top (9 Kartu termasuk Baterai Engine 12V & Baterai Alat) -->
   <div class="grid-metrics">
     <div class="card"><h4>Kecepatan</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
     <div class="card"><h4>Avg Pace</h4><div class="val" id="dispAvgSpeed" style="color: var(--success);">0.0<span class="unit">km/h</span></div></div>
@@ -103,7 +103,8 @@
     <div class="card"><h4>Durasi Burn Akhir</h4><div class="val" id="dispBurnDur" style="color: var(--warning);">0.0<span class="unit">s</span></div></div>
     <div class="card"><h4>Waktu Balap</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
     <div class="card"><h4>Lap Berjalan</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
-    <div class="card"><h4>Baterai</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
+    <div class="card"><h4>Baterai Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
+    <div class="card"><h4>Baterai Alat</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
   </div>
 
   <div class="main-layout">
@@ -188,13 +189,12 @@
     const LAP_COOLDOWN_MS = 25000;
     const GATE_RADIUS_M = 20;
 
-    // Penyimpanan Folder Race (Tersimpan Permanen di Browser)
+    // Penyimpanan Folder Race
     let raceFolders = JSON.parse(localStorage.getItem("vora_race_folders") || "[]");
-    let activeSessionLaps = []; // Menyimpan Lap 1, Lap 2, Lap 3... pada race yang sedang berlangsung
+    let activeSessionLaps = [];
     let currentLapCoords = [];
     let currentLapStarters = [];
 
-    // Status Navigasi Folder: null = Tampilan Daftar Folder, "ACTIVE" = Folder Sesi Aktif, number = Index Folder Arsip
     let openedFolder = "ACTIVE";
 
     const formatTime = (sec) => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
@@ -239,14 +239,12 @@
       const panelTitle = document.getElementById('panelTitle');
       const bestText = document.getElementById('bestLapText');
 
-      // MODE 1: TAMPILAN DAFTAR FOLDER (ROOT)
       if (openedFolder === null) {
         breadcrumb.style.display = "none";
         panelTitle.innerText = `FOLDER RACE (${raceFolders.length})`;
         bestText.innerText = "";
         list.innerHTML = "";
 
-        // Tampilkan pintasan ke Sesi Aktif di paling atas jika sedang berjalan
         if (activeSessionLaps.length > 0 || timerSec > 0) {
           const activeCard = document.createElement('div');
           activeCard.className = "folder-card active-session";
@@ -283,7 +281,6 @@
         return;
       }
 
-      // MODE 2: TAMPILAN ISI FOLDER (LIST LAP 1, LAP 2, LAP 3...)
       breadcrumb.style.display = "flex";
       panelTitle.innerText = "RIWAYAT PUTARAN";
 
@@ -313,7 +310,6 @@
       }
 
       list.innerHTML = "";
-      // Tampilkan berurutan Lap 1, Lap 2, Lap 3...
       targetLaps.forEach((data, lapIdx) => {
         const card = document.createElement('div');
         card.className = `lap-card ${data.best ? 'best' : ''}`;
@@ -328,7 +324,6 @@
       });
     }
 
-    // Jika sudah ada folder tersimpan saat web baru dibuka, tampilkan daftar foldernya
     if (raceFolders.length > 0) openedFolder = null;
     renderHistoryPanel();
 
@@ -361,7 +356,6 @@
       const isBest = lapDurSec > 0 && lapDurSec < bestLapSec;
       if (isBest) {
         bestLapSec = lapDurSec;
-        // Hapus tanda best pada lap sebelumnya di sesi aktif
         activeSessionLaps.forEach(l => l.best = false);
       }
 
@@ -381,7 +375,6 @@
         best: isBest
       });
 
-      // Otomatis tampilkan isi sesi aktif agar tim paddock bisa memantau Lap 1, 2, 3...
       openedFolder = "ACTIVE";
       renderHistoryPanel();
 
@@ -393,7 +386,6 @@
     }
 
     function archiveCurrentRaceToFolder() {
-      // Jika belum ada lap selesai tapi mobil sudah jalan/timer berjalan, jadikan Lap #1 agar data tidak hilang
       if (activeSessionLaps.length === 0 && (timerSec > 0 || totalDistKm > 0.01)) {
         const avg = timerSec > 0 ? totalDistKm / (timerSec / 3600) : 0;
         let totalEngSec = 0;
@@ -433,7 +425,6 @@
       localStorage.setItem("vora_race_folders", JSON.stringify(raceFolders));
     }
 
-    // Modal Inspector (Membaca dari folder yang sedang dibuka)
     function openModal(lapIdx) {
       initModal();
       const sourceLaps = (openedFolder === "ACTIVE") ? activeSessionLaps : (raceFolders[openedFolder]?.laps || []);
@@ -465,11 +456,10 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
-      // 1. HANDLE RESET DARI ALAT -> BUNGKUS RACE SEBELUMNYA JADI 1 FOLDER
+      // 1. HANDLE RESET DARI ALAT
       if (data.cmd === "RACE_RESET") {
         archiveCurrentRaceToFolder();
 
-        // Reset variabel sesi aktif untuk race berikutnya
         activeSessionLaps = [];
         currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0;
         totalDistKm = 0; lapStartDistKm = 0; bestLapSec = Infinity;
@@ -491,7 +481,6 @@
         if (startCircle) { liveMap.removeLayer(startCircle); startCircle = null; }
         startLocked = false;
 
-        // Kembali ke tampilan daftar folder agar folder baru langsung terlihat rapi
         openedFolder = null;
         renderHistoryPanel();
         
@@ -514,7 +503,7 @@
         else timerEl.style.color = "var(--accent)";
       }
 
-      // 3. HANDLE DATA NORMAL
+      // 3. HANDLE DATA NORMAL (Kecepatan, Jarak, Baterai Engine 12V & Baterai Alat)
       const spd = parseFloat(data.spd) || 0; 
       const lat = parseFloat(data.lat) || 0; 
       const lon = parseFloat(data.lon) || 0;
@@ -523,6 +512,14 @@
       document.getElementById('dispSpeed').innerHTML = `${spd.toFixed(1)}<span class="unit">km/h</span>`;
       document.getElementById('dispTrip').innerHTML = `${totalDistKm.toFixed(2)}<span class="unit">km</span>`;
       document.getElementById('dispBatt').innerHTML = `${parseInt(data.batt) || 0}<span class="unit">%</span>`;
+
+      // Update Baterai Engine 12V (Merah jika voltase drop di bawah 11.8V)
+      if (data.ebatt_v !== undefined) {
+        const engV = parseFloat(data.ebatt_v) || 0;
+        const engEl = document.getElementById('dispEngBatt');
+        engEl.innerHTML = `${engV.toFixed(1)}<span class="unit">V</span>`;
+        engEl.style.color = (engV > 0 && engV < 11.8) ? 'var(--danger)' : 'var(--warning)';
+      }
 
       if (timerSec > 5 && totalDistKm > 0.01) {
         const avg = totalDistKm / (timerSec / 3600);
