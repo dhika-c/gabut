@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>cj</title>
+  <title>VORA Telemetry - Cakra Jagad</title>
   
   <!-- Leaflet CSS & JS untuk Maps -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -43,7 +43,9 @@
 
     /* Riwayat Lap */
     .lap-feed { background: var(--card); border-radius: 10px; border: 1px solid #334155; padding: 15px; height: 540px; display: flex; flex-direction: column; }
-    .lap-feed-header { font-size: 0.9rem; font-weight: bold; color: var(--accent); display: flex; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 12px; }
+    .lap-feed-header { font-size: 0.9rem; font-weight: bold; color: var(--accent); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; margin-bottom: 12px; }
+    .clear-hist-btn { background: #334155; color: var(--muted); border: none; border-radius: 4px; padding: 3px 8px; font-size: 0.7rem; cursor: pointer; }
+    .clear-hist-btn:hover { background: var(--danger); color: #fff; }
     .lap-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
     .lap-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
     .lap-card:hover { background: var(--hover); border-color: var(--accent); transform: translateX(4px); }
@@ -95,7 +97,10 @@
     <div class="lap-feed">
       <div class="lap-feed-header">
         <span>RIWAYAT PUTARAN</span>
-        <span id="bestLapText" style="color: var(--purple);">BEST: --:--</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="bestLapText" style="color: var(--purple);">BEST: --:--</span>
+          <button class="clear-hist-btn" onclick="clearHistoryStorage()">HAPUS</button>
+        </div>
       </div>
       <div id="lapList" class="lap-list">
         <p id="noLapText" style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Menunggu mobil menyelesaikan Lap 1...</p>
@@ -127,17 +132,16 @@
     // ==========================================
     // 1. INIT LEAFLET MAPS
     // ==========================================
-    const DEFAULT_COORD = [-7.53215, 111.45892]; // Koordinat Madiun
+    const DEFAULT_COORD = [-7.53215, 111.45892];
     
-    // Map Utama (Live)
     const liveMap = L.map('liveMap').setView(DEFAULT_COORD, 17);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(liveMap);
     
     let carMarker = L.marker(DEFAULT_COORD, { icon: L.divIcon({ className: 'red-pulse-car', iconSize: [14, 14], iconAnchor: [7, 7] }) }).addTo(liveMap);
     let livePolyline = L.polyline([], { color: '#38bdf8', weight: 3 }).addTo(liveMap);
     let liveStarterGroup = L.layerGroup().addTo(liveMap);
+    let startCircle = null;
 
-    // Map Modal
     let modalMap = null, modalPolyline = null, modalStarterGroup = null;
     function initModal() {
       if (!modalMap) {
@@ -149,14 +153,14 @@
     }
 
     // ==========================================
-    // 2. LOGIKA KMHE (TIMER, BURN, LAP GEOFENCE)
+    // 2. LOGIKA KMHE & PENYIMPANAN HISTORY
     // ==========================================
     let currentLap = 1, globalStarterCount = 0;
-    let timerSec = 0, timerInterval = null, timerRunning = false;
+    let timerSec = 0;
     let lapStartSec = 0, totalDistKm = 0.0, lapStartDistKm = 0.0, bestLapSec = Infinity;
     
     // Burn Logika
-    let engineState = "COASTING"; // COASTING / BURNING
+    let engineState = "COASTING";
     let burnStartTimer = 0, maxBurnSpd = 0;
     let burnStartLat = 0, burnStartLon = 0, burnStartSpd = 0;
     
@@ -165,12 +169,11 @@
     const LAP_COOLDOWN_MS = 25000;
     const GATE_RADIUS_M = 20;
 
-    // Arsip Data
-    let lapArchive = {};
+    // Muat arsip lap dari localStorage agar tidak hilang saat refresh/reset
+    let lapHistoryList = JSON.parse(localStorage.getItem("vora_lap_history") || "[]");
     let currentLapCoords = [];
     let currentLapStarters = [];
 
-    // Helper
     const formatTime = (sec) => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
     function getDist(lat1, lon1, lat2, lon2) {
       const R = 6371e3, r = Math.PI/180;
@@ -178,17 +181,49 @@
       return R * 2 * Math.asin(Math.sqrt(a));
     }
 
-    function startTimer() {
-      if (!timerRunning) {
-        timerRunning = true;
-        timerInterval = setInterval(() => {
-          timerSec++;
-          document.getElementById('dispTimer').innerText = formatTime(timerSec);
-        }, 1000);
+    function renderSavedHistory() {
+      const list = document.getElementById('lapList');
+      if (lapHistoryList.length === 0) {
+        list.innerHTML = '<p id="noLapText" style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Menunggu mobil menyelesaikan Lap 1...</p>';
+        document.getElementById('bestLapText').innerText = "BEST: --:--";
+        return;
+      }
+
+      list.innerHTML = "";
+      bestLapSec = Infinity;
+
+      lapHistoryList.forEach((data, index) => {
+        if (data.durSec > 0 && data.durSec < bestLapSec && !data.isSession) {
+          bestLapSec = data.durSec;
+        }
+        const card = document.createElement('div');
+        card.className = `lap-card ${data.best ? 'best' : ''}`;
+        card.onclick = () => openModal(index);
+        card.innerHTML = `
+          <div class="lap-card-left">
+            <span class="lap-title">${data.label} ${data.best ? '★' : ''}</span>
+            <span class="lap-sub">${data.avgSpd} km/h • ${(data.distM/1000).toFixed(2)} km • ${data.starts} Stater</span>
+          </div>
+          <div class="lap-time">${data.timeStr}</div>`;
+        list.appendChild(card);
+      });
+
+      if (bestLapSec !== Infinity) {
+        document.getElementById('bestLapText').innerText = `BEST: ${formatTime(bestLapSec)}`;
       }
     }
 
-    // Trigger Saat Mesin Dianggap Mati (Durasi & Titik direkam)
+    function clearHistoryStorage() {
+      if (confirm("Hapus semua riwayat putaran tersimpan?")) {
+        lapHistoryList = [];
+        localStorage.removeItem("vora_lap_history");
+        renderSavedHistory();
+      }
+    }
+
+    // Panggil saat halaman web pertama kali dimuat
+    renderSavedHistory();
+
     function recordStarterFinished() {
       globalStarterCount++;
       document.getElementById('dispStarter').innerText = globalStarterCount;
@@ -208,45 +243,55 @@
         .bindPopup(`<b>Stater #${idxInLap}</b><br>Akselerasi: ${burnStartSpd.toFixed(1)} ➔ ${maxBurnSpd.toFixed(1)} km/h<br><b>Mesin Nyala: ${duration.toFixed(1)} s</b>`);
     }
 
-    function finishLap() {
-      const lapDurSec = timerSec - lapStartSec; lapStartSec = timerSec;
-      const lapDist = (totalDistKm - lapStartDistKm) * 1000; lapStartDistKm = totalDistKm;
+    function saveLapRecord(isManualReset = false) {
+      const lapDurSec = timerSec - lapStartSec;
+      const lapDist = (totalDistKm - lapStartDistKm) * 1000;
+      if (lapDurSec <= 0 && lapDist < 10) return; // Abaikan jika belum bergerak sama sekali
+
+      lapStartSec = timerSec;
+      lapStartDistKm = totalDistKm;
       const lapAvg = lapDurSec > 0 ? (lapDist / 1000) / (lapDurSec / 3600) : 0;
       
-      const isBest = lapDurSec < bestLapSec;
-      if (isBest) { bestLapSec = lapDurSec; document.getElementById('bestLapText').innerText = `BEST: ${formatTime(bestLapSec)}`; }
+      const isBest = !isManualReset && (lapDurSec < bestLapSec);
+      if (isBest) bestLapSec = lapDurSec;
 
       let totalEngSec = 0;
       currentLapStarters.forEach(s => totalEngSec += s.dur);
 
-      lapArchive[currentLap] = {
-        lap: currentLap, timeStr: formatTime(lapDurSec), avgSpd: lapAvg.toFixed(1),
-        starts: currentLapStarters.length, engTime: totalEngSec.toFixed(1),
-        distM: Math.round(lapDist), coords: [...currentLapCoords], starters: [...currentLapStarters], best: isBest
+      const record = {
+        label: isManualReset ? `RUN (${new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})})` : `LAP #${currentLap}`,
+        isSession: isManualReset,
+        durSec: lapDurSec,
+        timeStr: formatTime(lapDurSec),
+        avgSpd: lapAvg.toFixed(1),
+        starts: currentLapStarters.length,
+        engTime: totalEngSec.toFixed(1),
+        distM: Math.round(lapDist),
+        coords: [...currentLapCoords],
+        starters: [...currentLapStarters],
+        best: isBest
       };
 
-      // Tampilkan ke List
-      const list = document.getElementById('lapList');
-      if (document.getElementById('noLapText')) document.getElementById('noLapText').remove();
-      
-      const data = lapArchive[currentLap];
-      const card = document.createElement('div');
-      card.className = `lap-card ${data.best ? 'best' : ''}`;
-      card.onclick = () => openModal(data.lap);
-      card.innerHTML = `<div class="lap-card-left"><span class="lap-title">LAP #${data.lap} ${data.best ? '★' : ''}</span><span class="lap-sub">${data.avgSpd} km/h • ${data.starts} Stater • ${data.engTime}s Burn</span></div><div class="lap-time">${data.timeStr}</div>`;
-      list.prepend(card);
+      lapHistoryList.unshift(record);
+      localStorage.setItem("vora_lap_history", JSON.stringify(lapHistoryList));
+      renderSavedHistory();
+    }
 
-      // Bersihkan Map Live & Siapkan lap baru
+    function finishLap() {
+      saveLapRecord(false);
       liveStarterGroup.clearLayers();
-      currentLapCoords = []; currentLapStarters = [];
-      currentLap++; document.getElementById('dispLap').innerText = currentLap;
+      currentLapCoords = [];
+      currentLapStarters = [];
+      currentLap++;
+      document.getElementById('dispLap').innerText = currentLap;
     }
 
     // Modal
-    function openModal(lap) {
+    function openModal(index) {
       initModal();
-      const d = lapArchive[lap];
-      document.getElementById('mTitle').innerText = `ANALISIS SPASIAL LAP #${d.lap}`;
+      const d = lapHistoryList[index];
+      if (!d) return;
+      document.getElementById('mTitle').innerText = `ANALISIS SPASIAL - ${d.label}`;
       document.getElementById('mTime').innerText = d.timeStr;
       document.getElementById('mAvg').innerText = `${d.avgSpd} km/h`;
       document.getElementById('mStarts').innerText = d.starts;
@@ -270,37 +315,54 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
-      // 1. HANDLE RESET DARI TOMBOL GARIS START
+      // 1. HANDLE RESET DARI ALAT (Simpan sesi terakhir ke History, JANGAN hapus riwayat lama)
       if (data.cmd === "RACE_RESET") {
+        saveLapRecord(true);
+
         currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0; totalDistKm = 0; lapStartDistKm = 0;
-        lapArchive = {}; currentLapCoords = []; currentLapStarters = []; bestLapSec = Infinity;
+        currentLapCoords = []; currentLapStarters = [];
         
-        document.getElementById('dispStarter').innerText = "0"; document.getElementById('dispLap').innerText = "1";
+        document.getElementById('dispSpeed').innerHTML = `0.0<span class="unit">km/h</span>`;
+        document.getElementById('dispAvgSpeed').innerHTML = `0.0<span class="unit">km/h</span>`;
+        document.getElementById('dispTrip').innerHTML = `0.00<span class="unit">km</span>`;
+        document.getElementById('dispStarter').innerText = "0";
+        document.getElementById('dispLap').innerText = "1";
         document.getElementById('dispBurnDur').innerHTML = `0.0<span class="unit">s</span>`;
-        document.getElementById('bestLapText').innerText = "BEST: --:--";
-        document.getElementById('lapList').innerHTML = '<p id="noLapText" style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Menunggu mobil menyelesaikan Lap 1...</p>';
-        liveStarterGroup.clearLayers(); livePolyline.setLatLngs([]);
+        
+        const timerEl = document.getElementById('dispTimer');
+        timerEl.innerText = "00:00";
+        timerEl.style.color = "var(--accent)";
+
+        liveStarterGroup.clearLayers();
+        livePolyline.setLatLngs([]);
+        if (startCircle) { liveMap.removeLayer(startCircle); startCircle = null; }
+        startLocked = false;
         
         if (data.start_lat && data.start_lon) {
           startLat = parseFloat(data.start_lat); startLon = parseFloat(data.start_lon); startLocked = true;
-          L.circle([startLat, startLon], { 
-            radius: GATE_RADIUS_M, 
-            color: '#22c55e', 
-            weight: 2, 
-            dashArray: '6, 6', 
-            fillColor: '#22c55e', 
-            fillOpacity: 0.15 
+          startCircle = L.circle([startLat, startLon], { 
+            radius: GATE_RADIUS_M, color: '#22c55e', weight: 2, dashArray: '6, 6', fillColor: '#22c55e', fillOpacity: 0.15 
           }).addTo(liveMap).bindPopup("Garis Start / Finish");
         }
-        clearInterval(timerInterval); timerRunning = false; startTimer();
         return;
       }
 
-      // 2. HANDLE DATA NORMAL
+      // 2. SINKRONISASI TIMER LANGSUNG DARI ESP32 (Berhenti otomatis saat alat STOP)
+      if (data.time !== undefined) {
+        timerSec = parseInt(data.time) || 0;
+        const timerEl = document.getElementById('dispTimer');
+        timerEl.innerText = formatTime(timerSec);
+        // Warna merah jika status alat STOP (t_state === 2), oranye jika RUN (1), biru jika READY (0)
+        if (data.t_state === 2) timerEl.style.color = "var(--danger)";
+        else if (data.t_state === 1) timerEl.style.color = "var(--warning)";
+        else timerEl.style.color = "var(--accent)";
+      }
+
+      // 3. HANDLE DATA NORMAL
       const spd = parseFloat(data.spd) || 0; 
       const lat = parseFloat(data.lat) || 0; 
       const lon = parseFloat(data.lon) || 0;
-      totalDistKm = parseFloat(data.trip) || totalDistKm;
+      totalDistKm = parseFloat(data.trip) || 0;
       
       document.getElementById('dispSpeed').innerHTML = `${spd.toFixed(1)}<span class="unit">km/h</span>`;
       document.getElementById('dispTrip').innerHTML = `${totalDistKm.toFixed(2)}<span class="unit">km</span>`;
@@ -313,39 +375,31 @@
         aEl.style.color = avg >= 25.0 ? 'var(--success)' : 'var(--danger)';
       }
 
-      // 3. LOGIKA DURASI ENGINE BURN
+      // 4. LOGIKA DURASI ENGINE BURN
       if (engineState === "COASTING" && spd > 19.0) {
         engineState = "BURNING"; burnStartTimer = Date.now(); maxBurnSpd = spd;
         burnStartLat = lat; burnStartLon = lon; burnStartSpd = spd;
-        startTimer();
       } else if (engineState === "BURNING") {
         if (spd > maxBurnSpd) maxBurnSpd = spd;
-        if (spd <= maxBurnSpd - 0.8) { // Kecepatan drop = mesin mati
+        if (spd <= maxBurnSpd - 0.8) {
           engineState = "COASTING";
           if (lat !== 0 && lon !== 0) recordStarterFinished();
         }
       }
 
-      // 4. TRACKING & GEOFENCE PETA
+      // 5. TRACKING & GEOFENCE PETA
       if (lat !== 0 && lon !== 0) {
         const pos = [lat, lon];
         carMarker.setLatLng(pos); livePolyline.addLatLng(pos); liveMap.panTo(pos);
         currentLapCoords.push(pos);
 
-        // Kunci garis start otomatis jika belum direset via tombol
         if (!startLocked && spd > 5.0) {
           startLat = lat; startLon = lon; startLocked = true;
-          L.circle([startLat, startLon], { 
-            radius: GATE_RADIUS_M, 
-            color: '#22c55e', 
-            weight: 2, 
-            dashArray: '6, 6', 
-            fillColor: '#22c55e', 
-            fillOpacity: 0.15 
+          startCircle = L.circle([startLat, startLon], { 
+            radius: GATE_RADIUS_M, color: '#22c55e', weight: 2, dashArray: '6, 6', fillColor: '#22c55e', fillOpacity: 0.15 
           }).addTo(liveMap).bindPopup("Garis Start / Finish");
-        } // <--- KURUNG TUTUP SUDAH DIPERBAIKI DI SINI
+        }
 
-        // Deteksi mobil melewati garis finish
         if (startLocked) {
           const dist = getDist(lat, lon, startLat, startLon);
           if (dist <= GATE_RADIUS_M && (Date.now() - lastLapTimestamp > LAP_COOLDOWN_MS)) {
@@ -356,7 +410,8 @@
       }
     }
 
-    const client = new Paho.MQTT.Client(broker, Number(port), "dash_" + Math.random().toString(16).substr(2,6));
+    // Sertakan path "/mqtt" sesuai standar WebSocket HiveMQ
+    const client = new Paho.MQTT.Client(broker, Number(port), "/mqtt", "dash_" + Math.random().toString(16).substr(2,6));
     
     client.onConnectionLost = () => { 
       document.getElementById('connStatus').className = "status-badge disconnected"; 
@@ -364,27 +419,27 @@
       setTimeout(connect, 3000); 
     };
     
-    client.onMessageArrived = (m) => { 
+    client.onMessageArrived = (msg) => { 
       try { 
-        processTelemetry(JSON.parse(m.payloadString)); 
-      } catch (e) {
-        console.error("Format data salah:", e);
+        processTelemetry(JSON.parse(msg.payloadString)); 
+      } catch(e) {
+        console.error("JSON Parse Error:", e);
       } 
     };
 
     function connect() { 
       client.connect({ 
-        useSSL: true, // Wajib true agar HTTPS GitHub Pages tidak memblokir koneksi
+        useSSL: true,
         timeout: 5,
         onSuccess: () => { 
           document.getElementById('connStatus').className = "status-badge connected"; 
           document.getElementById('connStatus').innerText = "LIVE PADDOCK"; 
           client.subscribe(topic); 
         }, 
-        onFailure: () => {
-          document.getElementById('connStatus').className = "status-badge disconnected";
-          document.getElementById('connStatus').innerText = "RECONNECTING...";
-          setTimeout(connect, 3000);
+        onFailure: () => { 
+          document.getElementById('connStatus').className = "status-badge disconnected"; 
+          document.getElementById('connStatus').innerText = "RECONNECTING..."; 
+          setTimeout(connect, 3000); 
         }
       }); 
     }
