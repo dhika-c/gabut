@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VORA Telemetry</title>
+  <title>VORA Telemetry - Cakra Jagad</title>
   
   <!-- Leaflet CSS & JS untuk Maps -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -11,6 +11,10 @@
   
   <!-- MQTT via Paho WebSocket -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+  <!-- Firebase Realtime Database SDK (Untuk Sinkronisasi Semua Device) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <style>
     :root {
@@ -89,22 +93,22 @@
   <header>
     <div>
       <h2>dhika ganteng banget</h2>
-      <p style="font-size: 0.8rem; color: var(--muted);">Cakra Jagad Team</p>
+      <p style="font-size: 0.8rem; color: var(--muted);">Cakra Jagad Team • <span id="cloudSyncStatus" style="color: var(--warning);">Syncing Cloud...</span></p>
     </div>
     <div id="connStatus" class="status-badge disconnected">DISCONNECTED</div>
   </header>
 
-  <!-- Metrik Top (9 Kartu termasuk Baterai Engine 12V & Baterai Alat) -->
+  <!-- Metrik Top -->
   <div class="grid-metrics">
-    <div class="card"><h4>speed</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
+    <div class="card"><h4>Kecepatan</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
     <div class="card"><h4>Avg Pace</h4><div class="val" id="dispAvgSpeed" style="color: var(--success);">0.0<span class="unit">km/h</span></div></div>
-    <div class="card"><h4>Distance</h4><div class="val" id="dispTrip">0.00<span class="unit">km</span></div></div>
+    <div class="card"><h4>Jarak Total</h4><div class="val" id="dispTrip">0.00<span class="unit">km</span></div></div>
     <div class="card"><h4>Total Stater</h4><div class="val" id="dispStarter" style="color: var(--warning);">0</div></div>
-    <div class="card"><h4>Engin Runtime</h4><div class="val" id="dispBurnDur" style="color: var(--warning);">0.0<span class="unit">s</span></div></div>
-    <div class="card"><h4>Race Time</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
-    <div class="card"><h4>Current lap</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
-    <div class="card"><h4>Batt Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
-    <div class="card"><h4>Batt Telemetry</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
+    <div class="card"><h4>Durasi Burn Akhir</h4><div class="val" id="dispBurnDur" style="color: var(--warning);">0.0<span class="unit">s</span></div></div>
+    <div class="card"><h4>Waktu Balap</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
+    <div class="card"><h4>Lap Berjalan</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
+    <div class="card"><h4>Baterai Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
+    <div class="card"><h4>Baterai Alat</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
   </div>
 
   <div class="main-layout">
@@ -114,14 +118,14 @@
         <span id="panelTitle">FOLDER DATA RACE</span>
         <div class="header-actions">
           <span id="bestLapText" style="color: var(--purple); font-size: 0.78rem;">BEST: --:--</span>
-          <button id="btnClearAll" class="btn-sm btn-danger" onclick="clearAllFolders()">CLEAR</button>
+          <button id="btnClearAll" class="btn-sm btn-danger" onclick="clearAllFolders()">HAPUS</button>
         </div>
       </div>
 
       <!-- Bar Navigasi Saat Membuka Folder -->
       <div id="folderBreadcrumb" class="folder-breadcrumb" style="display: none;">
         <button class="btn-sm" onclick="closeFolder()">← FOLDER</button>
-        <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">LIVE SESSION</span>
+        <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">SESI BERJALAN</span>
       </div>
 
       <div id="lapList" class="lap-list"></div>
@@ -136,7 +140,7 @@
           <h3 id="mTitle" style="color: var(--accent);">ANALISIS SPASIAL LAP #1</h3>
           <p style="font-size: 0.75rem; color: var(--muted);">Peta jalur dan profil titik stater (Burn)</p>
         </div>
-        <button class="close-btn" onclick="closeModal()">CLOSE ✕</button>
+        <button class="close-btn" onclick="closeModal()">TUTUP ✕</button>
       </div>
       <div id="modalMap"></div>
       <div class="modal-stats-grid">
@@ -149,6 +153,19 @@
   </div>
 
   <script>
+    // ==========================================
+    // 0. KONFIGURASI FIREBASE REALTIME DATABASE
+    // ==========================================
+    // GANTI URL DI BAWAH DENGAN URL FIREBASE ANDA!
+    const firebaseConfig = {
+      databaseURL: "https://vora-cj-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const foldersRef = db.ref("vora_cakra/race_folders");
+    const activeSessionRef = db.ref("vora_cakra/active_session");
+
     // ==========================================
     // 1. INIT LEAFLET MAPS
     // ==========================================
@@ -173,7 +190,7 @@
     }
 
     // ==========================================
-    // 2. LOGIKA KMHE & SISTEM FOLDER PER RACE
+    // 2. LOGIKA KMHE & CLOUD SYNC ANTAR DEVICE
     // ==========================================
     let currentLap = 1, globalStarterCount = 0;
     let timerSec = 0;
@@ -189,13 +206,13 @@
     const LAP_COOLDOWN_MS = 25000;
     const GATE_RADIUS_M = 20;
 
-    // Penyimpanan Folder Race
-    let raceFolders = JSON.parse(localStorage.getItem("vora_race_folders") || "[]");
+    // Data Tersinkronisasi dari Cloud Firebase
+    let raceFolders = []; // Array objek folder dari Firebase
     let activeSessionLaps = [];
     let currentLapCoords = [];
     let currentLapStarters = [];
 
-    let openedFolder = "ACTIVE";
+    let openedFolder = null; // null = Daftar Folder, "ACTIVE" = Sesi Aktif, number = Index Folder
 
     const formatTime = (sec) => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
     function getDist(lat1, lon1, lat2, lon2) {
@@ -203,6 +220,42 @@
       const a = 0.5 - Math.cos((lat2 - lat1)*r)/2 + Math.cos(lat1*r)*Math.cos(lat2*r) * (1 - Math.cos((lon2 - lon1)*r))/2;
       return R * 2 * Math.asin(Math.sqrt(a));
     }
+
+    // Listener Real-Time Firebase: Otomatis update Laptop & HP secara bersamaan!
+    foldersRef.on("value", (snapshot) => {
+      document.getElementById("cloudSyncStatus").innerText = "Cloud Synced ✓";
+      document.getElementById("cloudSyncStatus").style.color = "var(--success)";
+
+      const val = snapshot.val();
+      if (!val) {
+        raceFolders = [];
+      } else {
+        // Ubah objek Firebase menjadi array dan urutkan dari yang terbaru
+        raceFolders = Object.keys(val).map(key => ({
+          firebaseKey: key,
+          ...val[key]
+        })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      }
+      renderHistoryPanel();
+    }, (err) => {
+      document.getElementById("cloudSyncStatus").innerText = "Cloud Error (Cek URL Firebase)";
+      document.getElementById("cloudSyncStatus").style.color = "var(--danger)";
+    });
+
+    // Listener Sesi Aktif agar HP yang baru dibuka langsung melihat Lap yang sedang berjalan
+    activeSessionRef.on("value", (snapshot) => {
+      const val = snapshot.val();
+      if (val && Array.isArray(val.laps)) {
+        activeSessionLaps = val.laps;
+        currentLap = activeSessionLaps.length + 1;
+        document.getElementById('dispLap').innerText = currentLap;
+      } else {
+        activeSessionLaps = [];
+      }
+      if (openedFolder === "ACTIVE" || openedFolder === null) {
+        renderHistoryPanel();
+      }
+    });
 
     function openFolder(target) {
       openedFolder = target;
@@ -216,19 +269,18 @@
 
     function deleteSingleFolder(event, idx) {
       event.stopPropagation();
-      if (confirm(`Hapus folder "${raceFolders[idx].name}"?`)) {
-        raceFolders.splice(idx, 1);
-        localStorage.setItem("vora_race_folders", JSON.stringify(raceFolders));
-        renderHistoryPanel();
+      const target = raceFolders[idx];
+      if (!target) return;
+      if (confirm(`Hapus folder "${target.name}" di semua device?`)) {
+        foldersRef.child(target.firebaseKey).remove();
       }
     }
 
     function clearAllFolders() {
-      if (confirm("Hapus semua folder riwayat race tersimpan?")) {
-        raceFolders = [];
-        localStorage.removeItem("vora_race_folders");
-        if (typeof openedFolder === "number") openedFolder = null;
-        renderHistoryPanel();
+      if (confirm("Hapus SEMUA folder riwayat race dari Cloud (Laptop & HP)?")) {
+        foldersRef.remove();
+        activeSessionRef.remove();
+        openedFolder = null;
       }
     }
 
@@ -239,6 +291,7 @@
       const panelTitle = document.getElementById('panelTitle');
       const bestText = document.getElementById('bestLapText');
 
+      // MODE 1: DAFTAR FOLDER (ROOT)
       if (openedFolder === null) {
         breadcrumb.style.display = "none";
         panelTitle.innerText = `FOLDER RACE (${raceFolders.length})`;
@@ -259,21 +312,22 @@
         }
 
         if (raceFolders.length === 0 && activeSessionLaps.length === 0 && timerSec === 0) {
-          list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Belum ada folder race.<br>Hasil race otomatis menjadi 1 folder setelah alat di-reset.</p>';
+          list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Belum ada folder race di Cloud.<br>Hasil race otomatis tersinkron ke semua device setelah alat di-reset.</p>';
           return;
         }
 
         raceFolders.forEach((folder, idx) => {
+          const lapsArr = folder.laps || [];
           const card = document.createElement('div');
           card.className = "folder-card";
           card.onclick = () => openFolder(idx);
           card.innerHTML = `
             <div>
               <span class="folder-title">📁 ${folder.name}</span>
-              <span class="folder-sub">${folder.dateStr} • ${folder.totalDist.toFixed(2)} km • Best ${folder.bestStr}</span>
+              <span class="folder-sub">${folder.dateStr} • ${(folder.totalDist || 0).toFixed(2)} km • Best ${folder.bestStr || '--:--'}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
-              <span class="folder-badge">${folder.laps.length} LAP</span>
+              <span class="folder-badge">${lapsArr.length} LAP</span>
               <button class="btn-sm btn-danger" onclick="deleteSingleFolder(event, ${idx})" title="Hapus Folder">✕</button>
             </div>`;
           list.appendChild(card);
@@ -281,6 +335,7 @@
         return;
       }
 
+      // MODE 2: ISI FOLDER (LIST LAP 1, LAP 2, LAP 3...)
       breadcrumb.style.display = "flex";
       panelTitle.innerText = "RIWAYAT PUTARAN";
 
@@ -293,9 +348,9 @@
         folderBestStr = bestLapSec !== Infinity ? formatTime(bestLapSec) : "--:--";
       } else if (raceFolders[openedFolder]) {
         const f = raceFolders[openedFolder];
-        folderNameEl.innerText = `📁 ${f.name} (${f.laps.length} Lap)`;
-        targetLaps = f.laps;
-        folderBestStr = f.bestStr;
+        targetLaps = f.laps || [];
+        folderNameEl.innerText = `📁 ${f.name} (${targetLaps.length} Lap)`;
+        folderBestStr = f.bestStr || "--:--";
       } else {
         openedFolder = null;
         renderHistoryPanel();
@@ -323,9 +378,6 @@
         list.appendChild(card);
       });
     }
-
-    if (raceFolders.length > 0) openedFolder = null;
-    renderHistoryPanel();
 
     function recordStarterFinished() {
       globalStarterCount++;
@@ -375,6 +427,9 @@
         best: isBest
       });
 
+      // Simpan sesi aktif ke Cloud agar HP yang baru join langsung sinkron
+      activeSessionRef.set({ laps: activeSessionLaps });
+
       openedFolder = "ACTIVE";
       renderHistoryPanel();
 
@@ -408,21 +463,23 @@
 
       if (activeSessionLaps.length === 0) return;
 
+      // Kunci unik per 10 detik agar jika Laptop & HP terbuka bersamaan saat reset, tidak membuat folder ganda
+      const dedupKey = "race_" + Math.floor(Date.now() / 10000);
       const raceNumber = raceFolders.length + 1;
       const now = new Date();
       const dateStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' +
                       now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-      const newFolder = {
+      foldersRef.child(dedupKey).set({
         name: `RACE #${raceNumber}`,
+        createdAt: Date.now(),
         dateStr: dateStr,
         totalDist: totalDistKm,
         bestStr: bestLapSec !== Infinity ? formatTime(bestLapSec) : "--:--",
         laps: [...activeSessionLaps]
-      };
+      });
 
-      raceFolders.unshift(newFolder);
-      localStorage.setItem("vora_race_folders", JSON.stringify(raceFolders));
+      activeSessionRef.remove();
     }
 
     function openModal(lapIdx) {
@@ -438,15 +495,18 @@
       document.getElementById('mStarts').innerText = d.starts;
       document.getElementById('mEngTime').innerText = `${d.engTime} s`;
 
-      modalPolyline.setLatLngs(d.coords);
+      const coords = d.coords || [];
+      const starters = d.starters || [];
+
+      modalPolyline.setLatLngs(coords);
       modalStarterGroup.clearLayers();
-      d.starters.forEach(s => {
+      starters.forEach(s => {
         L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'starter-marker', html: s.id, iconSize:[20,20] }) })
          .addTo(modalStarterGroup).bindPopup(`<b>Stater #${s.id}</b><br>Speed: ${s.startSpd.toFixed(1)} ➔ ${s.peakSpd.toFixed(1)} km/h<br><b>Durasi: ${s.dur.toFixed(1)} s</b>`);
       });
 
       document.getElementById('lapModal').style.display = 'flex';
-      setTimeout(() => { modalMap.invalidateSize(); if(d.coords.length>0) modalMap.fitBounds(modalPolyline.getBounds(), {padding:[20,20]}); }, 250);
+      setTimeout(() => { modalMap.invalidateSize(); if(coords.length>0) modalMap.fitBounds(modalPolyline.getBounds(), {padding:[20,20]}); }, 250);
     }
     function closeModal() { document.getElementById('lapModal').style.display = 'none'; }
 
@@ -503,7 +563,7 @@
         else timerEl.style.color = "var(--accent)";
       }
 
-      // 3. HANDLE DATA NORMAL (Kecepatan, Jarak, Baterai Engine 12V & Baterai Alat)
+      // 3. HANDLE DATA NORMAL
       const spd = parseFloat(data.spd) || 0; 
       const lat = parseFloat(data.lat) || 0; 
       const lon = parseFloat(data.lon) || 0;
@@ -513,7 +573,6 @@
       document.getElementById('dispTrip').innerHTML = `${totalDistKm.toFixed(2)}<span class="unit">km</span>`;
       document.getElementById('dispBatt').innerHTML = `${parseInt(data.batt) || 0}<span class="unit">%</span>`;
 
-      // Update Baterai Engine 12V (Merah jika voltase drop di bawah 11.8V)
       if (data.ebatt_v !== undefined) {
         const engV = parseFloat(data.ebatt_v) || 0;
         const engEl = document.getElementById('dispEngBatt');
