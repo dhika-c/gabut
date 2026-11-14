@@ -12,10 +12,6 @@
   <!-- MQTT via Paho WebSocket -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 
-  <!-- Firebase Realtime Database SDK (Sinkronisasi Semua Device) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
   <style>
     :root {
       --bg: #0b1120; --card: #1e293b; --hover: #334155;
@@ -154,17 +150,9 @@
 
   <script>
     // ==========================================
-    // 0. KONFIGURASI FIREBASE REALTIME DATABASE
+    // 0. URL FIREBASE REST API (BEBAS ERROR SDK)
     // ==========================================
-    // PASTIKAN URL INI SAMA DENGAN URL FIREBASE PROJECT vora-cj ANDA
-    const firebaseConfig = {
-      databaseURL:  https://vora-cj-default-rtdb.asia-southeast1.firebasedatabase.app/
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    const foldersRef = db.ref("vora_cakra/race_folders");
-    const activeSessionRef = db.ref("vora_cakra/active_session");
+    const FIREBASE_BASE = "https://vora-cj-default-rtdb.asia-southeast1.firebasedatabase.app/vora_cakra";
 
     // ==========================================
     // 1. INIT LEAFLET MAPS
@@ -203,19 +191,20 @@
     
     // Geofence & Anti-Drift Logika
     let startLat = null, startLon = null, startLocked = false;
-    let hasLeftStartZone = false; // Wajib keluar dari area start dulu sebelum finish
+    let hasLeftStartZone = false;
     let lastLapTimestamp = 0;
     const LAP_COOLDOWN_MS = 15000;
     const GATE_RADIUS_M = 20;
-    const MIN_LAP_DIST_M = 50;    // Minimal jarak tempuh 1 lap (50m untuk tes, ubah ke 500m saat di sirkuit)
+    const MIN_LAP_DIST_M = 50; // Minimal 50m (ubah ke 500 saat di sirkuit)
 
-    // Data Tersinkronisasi dari Cloud Firebase
+    // Data Cloud
     let raceFolders = [];
     let activeSessionLaps = [];
     let currentLapCoords = [];
     let currentLapStarters = [];
+    let lastCloudFingerprint = "";
 
-    let openedFolder = null; // null = Daftar Folder, "ACTIVE" = Sesi Aktif, number = Index Folder
+    let openedFolder = null;
 
     const formatTime = (sec) => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
     function getDist(lat1, lon1, lat2, lon2) {
@@ -224,46 +213,57 @@
       return R * 2 * Math.asin(Math.sqrt(a));
     }
 
-    // Listener Real-Time Firebase: Sinkronisasi otomatis ke semua device
-    foldersRef.on("value", (snapshot) => {
-      document.getElementById("cloudSyncStatus").innerText = "Cloud Synced ✓";
-      document.getElementById("cloudSyncStatus").style.color = "var(--success)";
+    // Sinkronisasi Cloud via REST API (Cepat, Ringan, & Sinkron Semua Device)
+    async function syncFromCloud() {
+      try {
+        const res = await fetch(`${FIREBASE_BASE}.json`);
+        if (!res.ok) {
+          document.getElementById("cloudSyncStatus").innerText = `Cloud Blocked (HTTP ${res.status} - Cek Rules)`;
+          document.getElementById("cloudSyncStatus").style.color = "var(--danger)";
+          return;
+        }
+        const data = await res.json();
+        document.getElementById("cloudSyncStatus").innerText = "Cloud Synced ✓";
+        document.getElementById("cloudSyncStatus").style.color = "var(--success)";
 
-      const val = snapshot.val();
-      if (!val) {
-        raceFolders = [];
-      } else {
-        const rawList = Object.keys(val).map(key => ({
-          firebaseKey: key,
-          ...val[key]
-        })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        const newFingerprint = JSON.stringify(data || {});
+        if (newFingerprint === lastCloudFingerprint) return; // Tidak ada perubahan, jangan render ulang
+        lastCloudFingerprint = newFingerprint;
 
-        // Beri nomor urut RACE #1, #2, dst. secara rapi lalu balik urutan agar yang terbaru di atas
-        rawList.forEach((item, index) => {
-          item.displayName = `RACE #${index + 1}`;
-        });
-        raceFolders = rawList.reverse();
-      }
-      renderHistoryPanel();
-    }, (err) => {
-      document.getElementById("cloudSyncStatus").innerText = "Cloud Error (Cek URL Firebase)";
-      document.getElementById("cloudSyncStatus").style.color = "var(--danger)";
-    });
+        if (!data || !data.race_folders) {
+          raceFolders = [];
+        } else {
+          const val = data.race_folders;
+          const rawList = Object.keys(val).map(key => ({
+            firebaseKey: key,
+            ...val[key]
+          })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
-    // Listener Sesi Aktif
-    activeSessionRef.on("value", (snapshot) => {
-      const val = snapshot.val();
-      if (val && Array.isArray(val.laps)) {
-        activeSessionLaps = val.laps;
-        currentLap = activeSessionLaps.length + 1;
-        document.getElementById('dispLap').innerText = currentLap;
-      } else {
-        activeSessionLaps = [];
-      }
-      if (openedFolder === "ACTIVE" || openedFolder === null) {
+          rawList.forEach((item, index) => {
+            item.displayName = `RACE #${index + 1}`;
+          });
+          raceFolders = rawList.reverse();
+        }
+
+        if (data && data.active_session && Array.isArray(data.active_session.laps)) {
+          activeSessionLaps = data.active_session.laps;
+          currentLap = activeSessionLaps.length + 1;
+          document.getElementById('dispLap').innerText = currentLap;
+        } else if (!data || !data.active_session) {
+          activeSessionLaps = [];
+        }
+
         renderHistoryPanel();
+      } catch (err) {
+        document.getElementById("cloudSyncStatus").innerText = "Cloud Offline";
+        document.getElementById("cloudSyncStatus").style.color = "var(--danger)";
       }
-    });
+    }
+
+    // Jalankan sync langsung saat web dibuka & cek pembaruan tiap 3 detik
+    renderHistoryPanel();
+    syncFromCloud();
+    setInterval(syncFromCloud, 3000);
 
     function openFolder(target) {
       openedFolder = target;
@@ -275,20 +275,23 @@
       renderHistoryPanel();
     }
 
-    function deleteSingleFolder(event, idx) {
+    async function deleteSingleFolder(event, idx) {
       event.stopPropagation();
       const target = raceFolders[idx];
       if (!target) return;
       if (confirm(`Hapus folder "${target.displayName || target.name}" di semua device?`)) {
-        foldersRef.child(target.firebaseKey).remove();
+        await fetch(`${FIREBASE_BASE}/race_folders/${target.firebaseKey}.json`, { method: "DELETE" });
+        lastCloudFingerprint = "";
+        syncFromCloud();
       }
     }
 
-    function clearAllFolders() {
+    async function clearAllFolders() {
       if (confirm("Hapus SEMUA folder riwayat race dari Cloud (Laptop & HP)?")) {
-        foldersRef.remove();
-        activeSessionRef.remove();
+        await fetch(`${FIREBASE_BASE}.json`, { method: "DELETE" });
         openedFolder = null;
+        lastCloudFingerprint = "";
+        syncFromCloud();
       }
     }
 
@@ -437,8 +440,12 @@
         best: isBest
       });
 
-      // Sinkronkan sesi aktif ke Cloud saat balapan berlangsung
-      activeSessionRef.set({ laps: activeSessionLaps });
+      // Simpan sesi aktif ke Cloud via REST API
+      fetch(`${FIREBASE_BASE}/active_session.json`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ laps: activeSessionLaps })
+      });
 
       openedFolder = "ACTIVE";
       renderHistoryPanel();
@@ -484,9 +491,9 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
-      // 1. HANDLE RESET DARI ALAT (Folder diunggah langsung oleh ESP32 ke Firebase agar tidak dobel)
+      // 1. HANDLE RESET DARI ALAT
       if (data.cmd === "RACE_RESET") {
-        activeSessionRef.remove();
+        fetch(`${FIREBASE_BASE}/active_session.json`, { method: "DELETE" });
 
         activeSessionLaps = [];
         currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0;
@@ -512,6 +519,7 @@
 
         openedFolder = null;
         renderHistoryPanel();
+        setTimeout(() => { lastCloudFingerprint = ""; syncFromCloud(); }, 1500);
         
         if (data.start_lat && data.start_lon) {
           startLat = parseFloat(data.start_lat); startLon = parseFloat(data.start_lon); startLocked = true;
@@ -572,22 +580,18 @@
       if (lat !== 0 && lon !== 0) {
         const pos = [lat, lon];
 
-        // Posisikan marker pertama kali saat halaman baru dibuka meski mobil diam
         if (currentLapCoords.length === 0 && spd <= 1.5) {
           carMarker.setLatLng(pos);
           liveMap.panTo(pos);
         }
 
-        // TRIGGER UTAMA: Abaikan pergeseran GPS jika sensor roda diam (spd <= 1.5 km/h)
         if (spd <= 1.5) return;
 
-        // Roda benar-benar berputar -> Update marker, gambar rute, dan cek geofence
         carMarker.setLatLng(pos);
         livePolyline.addLatLng(pos);
         liveMap.panTo(pos);
         currentLapCoords.push(pos);
 
-        // Kunci titik Start otomatis begitu roda bergerak > 3 km/h
         if (!startLocked && spd > 3.0) {
           startLat = lat; startLon = lon; startLocked = true;
           hasLeftStartZone = false;
@@ -600,12 +604,10 @@
           const distFromStart = getDist(lat, lon, startLat, startLon);
           const currentLapDistM = (totalDistKm - lapStartDistKm) * 1000;
 
-          // Tandai bahwa mobil sudah keluar menjauh dari zona Start (> 35 meter)
           if (distFromStart > GATE_RADIUS_M + 15) {
             hasLeftStartZone = true;
           }
 
-          // Lap sah HANYA JIKA: masuk lingkaran finish + sudah keluar zona start + jarak tempuh >= MIN_LAP_DIST_M
           if (
             hasLeftStartZone &&
             distFromStart <= GATE_RADIUS_M &&
