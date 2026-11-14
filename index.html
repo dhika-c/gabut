@@ -12,7 +12,7 @@
   <!-- MQTT via Paho WebSocket -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 
-  <!-- Firebase Realtime Database SDK (Untuk Sinkronisasi Semua Device) -->
+  <!-- Firebase Realtime Database SDK (Sinkronisasi Semua Device) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
@@ -156,7 +156,7 @@
     // ==========================================
     // 0. KONFIGURASI FIREBASE REALTIME DATABASE
     // ==========================================
-    // GANTI URL DI BAWAH DENGAN URL FIREBASE ANDA!
+    // PASTIKAN URL INI SAMA DENGAN URL FIREBASE PROJECT vora-cj ANDA
     const firebaseConfig = {
       databaseURL: https://vora-cj-default-rtdb.asia-southeast1.firebasedatabase.app/
     };
@@ -190,7 +190,7 @@
     }
 
     // ==========================================
-    // 2. LOGIKA KMHE & CLOUD SYNC ANTAR DEVICE
+    // 2. LOGIKA KMHE, ANTI-DRIFT GPS & CLOUD SYNC
     // ==========================================
     let currentLap = 1, globalStarterCount = 0;
     let timerSec = 0;
@@ -201,13 +201,16 @@
     let burnStartTimer = 0, maxBurnSpd = 0;
     let burnStartLat = 0, burnStartLon = 0, burnStartSpd = 0;
     
-    // Geofence Logika
-    let startLat = null, startLon = null, startLocked = false, lastLapTimestamp = 0;
-    const LAP_COOLDOWN_MS = 25000;
+    // Geofence & Anti-Drift Logika
+    let startLat = null, startLon = null, startLocked = false;
+    let hasLeftStartZone = false; // Wajib keluar dari area start dulu sebelum finish
+    let lastLapTimestamp = 0;
+    const LAP_COOLDOWN_MS = 15000;
     const GATE_RADIUS_M = 20;
+    const MIN_LAP_DIST_M = 50;    // Minimal jarak tempuh 1 lap (50m untuk tes, ubah ke 500m saat di sirkuit)
 
     // Data Tersinkronisasi dari Cloud Firebase
-    let raceFolders = []; // Array objek folder dari Firebase
+    let raceFolders = [];
     let activeSessionLaps = [];
     let currentLapCoords = [];
     let currentLapStarters = [];
@@ -221,7 +224,7 @@
       return R * 2 * Math.asin(Math.sqrt(a));
     }
 
-    // Listener Real-Time Firebase: Otomatis update Laptop & HP secara bersamaan!
+    // Listener Real-Time Firebase: Sinkronisasi otomatis ke semua device
     foldersRef.on("value", (snapshot) => {
       document.getElementById("cloudSyncStatus").innerText = "Cloud Synced ✓";
       document.getElementById("cloudSyncStatus").style.color = "var(--success)";
@@ -230,11 +233,16 @@
       if (!val) {
         raceFolders = [];
       } else {
-        // Ubah objek Firebase menjadi array dan urutkan dari yang terbaru
-        raceFolders = Object.keys(val).map(key => ({
+        const rawList = Object.keys(val).map(key => ({
           firebaseKey: key,
           ...val[key]
-        })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        })).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+        // Beri nomor urut RACE #1, #2, dst. secara rapi lalu balik urutan agar yang terbaru di atas
+        rawList.forEach((item, index) => {
+          item.displayName = `RACE #${index + 1}`;
+        });
+        raceFolders = rawList.reverse();
       }
       renderHistoryPanel();
     }, (err) => {
@@ -242,7 +250,7 @@
       document.getElementById("cloudSyncStatus").style.color = "var(--danger)";
     });
 
-    // Listener Sesi Aktif agar HP yang baru dibuka langsung melihat Lap yang sedang berjalan
+    // Listener Sesi Aktif
     activeSessionRef.on("value", (snapshot) => {
       const val = snapshot.val();
       if (val && Array.isArray(val.laps)) {
@@ -271,7 +279,7 @@
       event.stopPropagation();
       const target = raceFolders[idx];
       if (!target) return;
-      if (confirm(`Hapus folder "${target.name}" di semua device?`)) {
+      if (confirm(`Hapus folder "${target.displayName || target.name}" di semua device?`)) {
         foldersRef.child(target.firebaseKey).remove();
       }
     }
@@ -312,19 +320,20 @@
         }
 
         if (raceFolders.length === 0 && activeSessionLaps.length === 0 && timerSec === 0) {
-          list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Belum ada folder race di Cloud.<br>Hasil race otomatis tersinkron ke semua device setelah alat di-reset.</p>';
+          list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Belum ada folder race di Cloud.<br>Hasil race otomatis tersimpan ke semua device setelah alat di-reset.</p>';
           return;
         }
 
         raceFolders.forEach((folder, idx) => {
           const lapsArr = folder.laps || [];
+          const label = folder.displayName || folder.name;
           const card = document.createElement('div');
           card.className = "folder-card";
           card.onclick = () => openFolder(idx);
           card.innerHTML = `
             <div>
-              <span class="folder-title">📁 ${folder.name}</span>
-              <span class="folder-sub">${folder.dateStr} • ${(folder.totalDist || 0).toFixed(2)} km • Best ${folder.bestStr || '--:--'}</span>
+              <span class="folder-title">📁 ${label}</span>
+              <span class="folder-sub">${folder.dateStr || ''} • ${(folder.totalDist || 0).toFixed(2)} km • Best ${folder.bestStr || '--:--'}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="folder-badge">${lapsArr.length} LAP</span>
@@ -348,8 +357,9 @@
         folderBestStr = bestLapSec !== Infinity ? formatTime(bestLapSec) : "--:--";
       } else if (raceFolders[openedFolder]) {
         const f = raceFolders[openedFolder];
+        const label = f.displayName || f.name;
         targetLaps = f.laps || [];
-        folderNameEl.innerText = `📁 ${f.name} (${targetLaps.length} Lap)`;
+        folderNameEl.innerText = `📁 ${label} (${targetLaps.length} Lap)`;
         folderBestStr = f.bestStr || "--:--";
       } else {
         openedFolder = null;
@@ -427,7 +437,7 @@
         best: isBest
       });
 
-      // Simpan sesi aktif ke Cloud agar HP yang baru join langsung sinkron
+      // Sinkronkan sesi aktif ke Cloud saat balapan berlangsung
       activeSessionRef.set({ laps: activeSessionLaps });
 
       openedFolder = "ACTIVE";
@@ -440,55 +450,13 @@
       document.getElementById('dispLap').innerText = currentLap;
     }
 
-    function archiveCurrentRaceToFolder() {
-      if (activeSessionLaps.length === 0 && (timerSec > 0 || totalDistKm > 0.01)) {
-        const avg = timerSec > 0 ? totalDistKm / (timerSec / 3600) : 0;
-        let totalEngSec = 0;
-        currentLapStarters.forEach(s => totalEngSec += s.dur);
-        bestLapSec = timerSec;
-
-        activeSessionLaps.push({
-          lap: 1,
-          durSec: timerSec,
-          timeStr: formatTime(timerSec),
-          avgSpd: avg.toFixed(1),
-          starts: currentLapStarters.length,
-          engTime: totalEngSec.toFixed(1),
-          distM: Math.round(totalDistKm * 1000),
-          coords: [...currentLapCoords],
-          starters: [...currentLapStarters],
-          best: true
-        });
-      }
-
-      if (activeSessionLaps.length === 0) return;
-
-      // Kunci unik per 10 detik agar jika Laptop & HP terbuka bersamaan saat reset, tidak membuat folder ganda
-      const dedupKey = "race_" + Math.floor(Date.now() / 10000);
-      const raceNumber = raceFolders.length + 1;
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' +
-                      now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-
-      foldersRef.child(dedupKey).set({
-        name: `RACE #${raceNumber}`,
-        createdAt: Date.now(),
-        dateStr: dateStr,
-        totalDist: totalDistKm,
-        bestStr: bestLapSec !== Infinity ? formatTime(bestLapSec) : "--:--",
-        laps: [...activeSessionLaps]
-      });
-
-      activeSessionRef.remove();
-    }
-
     function openModal(lapIdx) {
       initModal();
       const sourceLaps = (openedFolder === "ACTIVE") ? activeSessionLaps : (raceFolders[openedFolder]?.laps || []);
       const d = sourceLaps[lapIdx];
       if (!d) return;
 
-      const folderLabel = (openedFolder === "ACTIVE") ? "SESI AKTIF" : raceFolders[openedFolder].name;
+      const folderLabel = (openedFolder === "ACTIVE") ? "SESI AKTIF" : (raceFolders[openedFolder].displayName || raceFolders[openedFolder].name);
       document.getElementById('mTitle').innerText = `${folderLabel} — LAP #${d.lap}`;
       document.getElementById('mTime').innerText = d.timeStr;
       document.getElementById('mAvg').innerText = `${d.avgSpd} km/h`;
@@ -516,14 +484,15 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
-      // 1. HANDLE RESET DARI ALAT
+      // 1. HANDLE RESET DARI ALAT (Folder diunggah langsung oleh ESP32 ke Firebase agar tidak dobel)
       if (data.cmd === "RACE_RESET") {
-        archiveCurrentRaceToFolder();
+        activeSessionRef.remove();
 
         activeSessionLaps = [];
         currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0;
         totalDistKm = 0; lapStartDistKm = 0; bestLapSec = Infinity;
         currentLapCoords = []; currentLapStarters = [];
+        hasLeftStartZone = false;
         
         document.getElementById('dispSpeed').innerHTML = `0.0<span class="unit">km/h</span>`;
         document.getElementById('dispAvgSpeed').innerHTML = `0.0<span class="unit">km/h</span>`;
@@ -599,23 +568,52 @@
         }
       }
 
-      // 5. TRACKING & GEOFENCE PETA
+      // 5. TRACKING PETA & DETEKSI LAP (HANYA AKTIF JIKA RODA BERPUTAR > 1.5 KM/H)
       if (lat !== 0 && lon !== 0) {
         const pos = [lat, lon];
-        carMarker.setLatLng(pos); livePolyline.addLatLng(pos); liveMap.panTo(pos);
+
+        // Posisikan marker pertama kali saat halaman baru dibuka meski mobil diam
+        if (currentLapCoords.length === 0 && spd <= 1.5) {
+          carMarker.setLatLng(pos);
+          liveMap.panTo(pos);
+        }
+
+        // TRIGGER UTAMA: Abaikan pergeseran GPS jika sensor roda diam (spd <= 1.5 km/h)
+        if (spd <= 1.5) return;
+
+        // Roda benar-benar berputar -> Update marker, gambar rute, dan cek geofence
+        carMarker.setLatLng(pos);
+        livePolyline.addLatLng(pos);
+        liveMap.panTo(pos);
         currentLapCoords.push(pos);
 
-        if (!startLocked && spd > 5.0) {
+        // Kunci titik Start otomatis begitu roda bergerak > 3 km/h
+        if (!startLocked && spd > 3.0) {
           startLat = lat; startLon = lon; startLocked = true;
+          hasLeftStartZone = false;
           startCircle = L.circle([startLat, startLon], { 
             radius: GATE_RADIUS_M, color: '#22c55e', weight: 2, dashArray: '6, 6', fillColor: '#22c55e', fillOpacity: 0.15 
           }).addTo(liveMap).bindPopup("Garis Start / Finish");
         }
 
         if (startLocked) {
-          const dist = getDist(lat, lon, startLat, startLon);
-          if (dist <= GATE_RADIUS_M && (Date.now() - lastLapTimestamp > LAP_COOLDOWN_MS)) {
-            lastLapTimestamp = Date.now(); 
+          const distFromStart = getDist(lat, lon, startLat, startLon);
+          const currentLapDistM = (totalDistKm - lapStartDistKm) * 1000;
+
+          // Tandai bahwa mobil sudah keluar menjauh dari zona Start (> 35 meter)
+          if (distFromStart > GATE_RADIUS_M + 15) {
+            hasLeftStartZone = true;
+          }
+
+          // Lap sah HANYA JIKA: masuk lingkaran finish + sudah keluar zona start + jarak tempuh >= MIN_LAP_DIST_M
+          if (
+            hasLeftStartZone &&
+            distFromStart <= GATE_RADIUS_M &&
+            currentLapDistM >= MIN_LAP_DIST_M &&
+            (Date.now() - lastLapTimestamp > LAP_COOLDOWN_MS)
+          ) {
+            lastLapTimestamp = Date.now();
+            hasLeftStartZone = false;
             finishLap();
           }
         }
