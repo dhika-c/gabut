@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VORA Telemetry - Cakra Jagad</title>
   
-  <!-- Leaflet CSS & JS untuk Maps -->
+  <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
@@ -26,14 +26,23 @@
     .connected { background-color: var(--success); color: #000; }
     .disconnected { background-color: var(--danger); color: #fff; }
 
+    @keyframes blinkRed {
+      0%, 100% { color: var(--danger); opacity: 1; }
+      50% { color: #7f1d1d; opacity: 0.35; }
+    }
+    .speed-blink-red {
+      animation: blinkRed 0.5s infinite !important;
+      color: var(--danger) !important;
+    }
+
     /* Metrik Atas */
     .grid-metrics {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 10px; margin-bottom: 15px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; margin-bottom: 15px;
     }
-    .card { background: var(--card); padding: 10px 12px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
-    .card h4 { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
-    .card .val { font-size: 1.55rem; font-weight: 800; color: var(--accent); }
-    .card .unit { font-size: 0.75rem; color: var(--muted); margin-left: 2px; }
+    .card { background: var(--card); padding: 10px 10px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
+    .card h4 { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+    .card .val { font-size: 1.45rem; font-weight: 800; color: var(--accent); }
+    .card .unit { font-size: 0.72rem; color: var(--muted); margin-left: 2px; }
 
     /* Layout Utama */
     .main-layout { display: grid; grid-template-columns: 2.2fr 1fr; gap: 15px; }
@@ -48,11 +57,13 @@
     .btn-sm { background: #334155; color: var(--text); border: none; border-radius: 4px; padding: 4px 8px; font-size: 0.7rem; font-weight: bold; cursor: pointer; transition: 0.15s; }
     .btn-sm:hover { background: var(--accent); color: #000; }
     .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-success { background: var(--success); color: #000; }
+    .btn-success:hover { background: #16a34a; color: #fff; }
 
     .folder-breadcrumb { display: flex; justify-content: space-between; align-items: center; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 0.78rem; }
     .lap-list { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; padding-right: 2px; }
 
-    /* Kartu Folder */
+    /* Kartu Folder & Lap */
     .folder-card { background: #0f172a; border: 1px solid #334155; border-left: 4px solid var(--accent); border-radius: 8px; padding: 11px 12px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
     .folder-card:hover { background: var(--hover); border-color: var(--accent); transform: translateX(3px); }
     .folder-card.active-session { border-left-color: var(--success); background: rgba(34, 197, 94, 0.08); }
@@ -60,7 +71,6 @@
     .folder-sub { font-size: 0.72rem; color: var(--muted); display: block; margin-top: 3px; }
     .folder-badge { background: #1e293b; border: 1px solid #475569; color: var(--accent); font-size: 0.75rem; font-weight: bold; padding: 3px 8px; border-radius: 12px; white-space: nowrap; }
 
-    /* Kartu Lap di dalam Folder */
     .lap-card { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
     .lap-card:hover { background: var(--hover); border-color: var(--accent); transform: translateX(4px); }
     .lap-card.best { border-left: 4px solid var(--purple); }
@@ -70,16 +80,15 @@
 
     /* Modal Inspector */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 9999; }
-    .modal-content { background: var(--card); width: 92%; max-width: 800px; border-radius: 12px; border: 1px solid #475569; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .modal-content { background: var(--card); width: 92%; max-width: 820px; border-radius: 12px; border: 1px solid #475569; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 8px; }
     .close-btn { background: #334155; border: none; color: #fff; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-weight: bold; }
     .close-btn:hover { background: var(--danger); }
     #modalMap { height: 320px; width: 100%; border-radius: 8px; border: 1px solid #334155; }
     .modal-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .m-stat { background: #0f172a; padding: 8px; border-radius: 6px; text-align: center; font-size: 0.75rem; }
-    .m-stat b { display: block; font-size: 1.1rem; color: var(--accent); margin-top: 2px; }
+    .m-stat b { display: block; font-size: 1.05rem; color: var(--accent); margin-top: 2px; }
 
-    /* Pulsing Red Dot */
     .red-pulse-car { background-color: #ef4444; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px 3px rgba(239, 68, 68, 0.8); }
     .starter-marker { background: var(--warning); color: #000; font-weight: bold; font-size: 11px; text-align: center; line-height: 20px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #000; }
   </style>
@@ -94,16 +103,18 @@
     <div id="connStatus" class="status-badge disconnected">DISCONNECTED</div>
   </header>
 
-  <!-- Metrik Top -->
+  <!-- Metrik Top (11 Parameter Lengkap) -->
   <div class="grid-metrics">
     <div class="card"><h4>Kecepatan</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
     <div class="card"><h4>Avg Pace</h4><div class="val" id="dispAvgSpeed" style="color: var(--success);">0.0<span class="unit">km/h</span></div></div>
     <div class="card"><h4>Jarak Total</h4><div class="val" id="dispTrip">0.00<span class="unit">km</span></div></div>
-    <div class="card"><h4>Total Stater</h4><div class="val" id="dispStarter" style="color: var(--warning);">0</div></div>
-    <div class="card"><h4>Durasi Burn Akhir</h4><div class="val" id="dispBurnDur" style="color: var(--warning);">0.0<span class="unit">s</span></div></div>
     <div class="card"><h4>Waktu Balap</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
     <div class="card"><h4>Lap Berjalan</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
     <div class="card"><h4>Baterai Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
+    <div class="card"><h4>Energi Engine</h4><div class="val" id="dispEngJoule" style="color: var(--warning);">0<span class="unit">J</span></div></div>
+    <div class="card"><h4>Coast Drag</h4><div class="val" id="dispCoastDrag" style="color: var(--purple);">0.00<span class="unit">m/s²</span></div></div>
+    <div class="card"><h4>Roll Margin</h4><div class="val" id="dispRollMargin" style="color: var(--success);">100<span class="unit">%</span></div></div>
+    <div class="card"><h4>Total Stater</h4><div class="val" id="dispStarter" style="color: var(--warning);">0</div></div>
     <div class="card"><h4>Baterai Alat</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
   </div>
 
@@ -118,7 +129,6 @@
         </div>
       </div>
 
-      <!-- Bar Navigasi Saat Membuka Folder -->
       <div id="folderBreadcrumb" class="folder-breadcrumb" style="display: none;">
         <button class="btn-sm" onclick="closeFolder()">← FOLDER</button>
         <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">SESI BERJALAN</span>
@@ -128,34 +138,37 @@
     </div>
   </div>
 
-  <!-- Modal Inspector -->
+  <!-- Modal Inspector + Export CSV -->
   <div id="lapModal" class="modal-overlay">
     <div class="modal-content">
       <div class="modal-header">
         <div>
           <h3 id="mTitle" style="color: var(--accent);">ANALISIS SPASIAL LAP #1</h3>
-          <p style="font-size: 0.75rem; color: var(--muted);">Peta jalur dan profil titik stater (Burn)</p>
+          <p style="font-size: 0.75rem; color: var(--muted);">Speed Heatmap (Merah &lt;15 | Kuning 15-25 | Hijau &gt;25 km/h)</p>
         </div>
-        <button class="close-btn" onclick="closeModal()">TUTUP ✕</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-sm btn-success" onclick="exportCurrentModalCSV()">⬇ EXPORT CSV</button>
+          <button class="close-btn" onclick="closeModal()">TUTUP ✕</button>
+        </div>
       </div>
       <div id="modalMap"></div>
       <div class="modal-stats-grid">
         <div class="m-stat">Lap Time<b id="mTime">--:--</b></div>
         <div class="m-stat">Avg Speed<b id="mAvg">-- km/h</b></div>
-        <div class="m-stat">Stater Count<b id="mStarts" style="color: var(--warning);">0</b></div>
-        <div class="m-stat">Total Engine On<b id="mEngTime" style="color: var(--warning);">-- s</b></div>
+        <div class="m-stat">Energi Listrik<b id="mJoules" style="color: var(--warning);">0 J</b></div>
+        <div class="m-stat">Coast Drag<b id="mCoast" style="color: var(--purple);">0.00 m/s²</b></div>
       </div>
     </div>
   </div>
 
   <script>
     // ==========================================
-    // 0. URL FIREBASE REST API (BEBAS ERROR SDK)
+    // 0. URL FIREBASE REST API
     // ==========================================
     const FIREBASE_BASE = "https://vora-cj-default-rtdb.asia-southeast1.firebasedatabase.app/vora_cakra";
 
     // ==========================================
-    // 1. INIT LEAFLET MAPS
+    // 1. INIT LEAFLET MAPS & SPEED HEATMAP
     // ==========================================
     const DEFAULT_COORD = [-7.53215, 111.45892];
     
@@ -163,27 +176,44 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(liveMap);
     
     let carMarker = L.marker(DEFAULT_COORD, { icon: L.divIcon({ className: 'red-pulse-car', iconSize: [14, 14], iconAnchor: [7, 7] }) }).addTo(liveMap);
-    let livePolyline = L.polyline([], { color: '#38bdf8', weight: 3 }).addTo(liveMap);
+    let liveHeatmapGroup = L.layerGroup().addTo(liveMap);
     let liveStarterGroup = L.layerGroup().addTo(liveMap);
     let startCircle = null;
+    let lastLivePos = null;
 
-    let modalMap = null, modalPolyline = null, modalStarterGroup = null;
+    let modalMap = null, modalHeatmapGroup = null, modalStarterGroup = null;
+    let currentModalLapData = null;
+    let currentModalFolderName = "";
+
+    function getSpeedColor(spd) {
+      if (spd < 15.0) return '#ef4444'; // Merah (Pelan / Siap Burn)
+      if (spd <= 25.0) return '#facc15'; // Kuning (Cruising)
+      return '#22c55e'; // Hijau (High Momentum)
+    }
+
     function initModal() {
       if (!modalMap) {
         modalMap = L.map('modalMap').setView(DEFAULT_COORD, 17);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(modalMap);
-        modalPolyline = L.polyline([], { color: '#38bdf8', weight: 3 }).addTo(modalMap);
+        modalHeatmapGroup = L.layerGroup().addTo(modalMap);
         modalStarterGroup = L.layerGroup().addTo(modalMap);
       }
     }
 
     // ==========================================
-    // 2. LOGIKA KMHE, ANTI-DRIFT GPS & CLOUD SYNC
+    // 2. LOGIKA KMHE, ROLLOVER MARGIN & CLOUD SYNC
     // ==========================================
     let currentLap = 1, globalStarterCount = 0;
     let timerSec = 0;
     let lapStartSec = 0, totalDistKm = 0.0, lapStartDistKm = 0.0, bestLapSec = Infinity;
-    
+    let totalEngJoules = 0.0, lapStartJoules = 0.0, currentCoastDrag = 0.0;
+
+    // Parameter Sasis Roda Tiga (Track 550mm, CoG 200mm -> Critical Lateral G = 1.375 G)
+    const CRITICAL_LATERAL_G = 1.375;
+    let prevHeadingRad = null, prevHeadingTimeMs = 0;
+
+    let webLowSpeedArmed = false;
+
     // Burn Logika
     let engineState = "COASTING";
     let burnStartTimer = 0, maxBurnSpd = 0;
@@ -195,15 +225,13 @@
     let lastLapTimestamp = 0;
     const LAP_COOLDOWN_MS = 15000;
     const GATE_RADIUS_M = 20;
-    const MIN_LAP_DIST_M = 50; // Minimal 50m (ubah ke 500 saat di sirkuit)
+    const MIN_LAP_DIST_M = 50;
 
-    // Data Cloud
     let raceFolders = [];
     let activeSessionLaps = [];
-    let currentLapCoords = [];
+    let currentLapCoords = []; // Menyimpan [lat, lon, spd, joules, coastDrag]
     let currentLapStarters = [];
     let lastCloudFingerprint = "";
-
     let openedFolder = null;
 
     const formatTime = (sec) => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
@@ -212,13 +240,19 @@
       const a = 0.5 - Math.cos((lat2 - lat1)*r)/2 + Math.cos(lat1*r)*Math.cos(lat2*r) * (1 - Math.cos((lon2 - lon1)*r))/2;
       return R * 2 * Math.asin(Math.sqrt(a));
     }
+    function getBearingRad(lat1, lon1, lat2, lon2) {
+      const r = Math.PI / 180;
+      const y = Math.sin((lon2 - lon1) * r) * Math.cos(lat2 * r);
+      const x = Math.cos(lat1 * r) * Math.sin(lat2 * r) -
+                Math.sin(lat1 * r) * Math.cos(lat2 * r) * Math.cos((lon2 - lon1) * r);
+      return Math.atan2(y, x);
+    }
 
-    // Sinkronisasi Cloud via REST API (Cepat, Ringan, & Sinkron Semua Device)
     async function syncFromCloud() {
       try {
         const res = await fetch(`${FIREBASE_BASE}.json`);
         if (!res.ok) {
-          document.getElementById("cloudSyncStatus").innerText = `Cloud Blocked (HTTP ${res.status} - Cek Rules)`;
+          document.getElementById("cloudSyncStatus").innerText = `Cloud Blocked (HTTP ${res.status})`;
           document.getElementById("cloudSyncStatus").style.color = "var(--danger)";
           return;
         }
@@ -227,7 +261,7 @@
         document.getElementById("cloudSyncStatus").style.color = "var(--success)";
 
         const newFingerprint = JSON.stringify(data || {});
-        if (newFingerprint === lastCloudFingerprint) return; // Tidak ada perubahan, jangan render ulang
+        if (newFingerprint === lastCloudFingerprint) return;
         lastCloudFingerprint = newFingerprint;
 
         if (!data || !data.race_folders) {
@@ -260,20 +294,12 @@
       }
     }
 
-    // Jalankan sync langsung saat web dibuka & cek pembaruan tiap 3 detik
     renderHistoryPanel();
     syncFromCloud();
     setInterval(syncFromCloud, 3000);
 
-    function openFolder(target) {
-      openedFolder = target;
-      renderHistoryPanel();
-    }
-
-    function closeFolder() {
-      openedFolder = null;
-      renderHistoryPanel();
-    }
+    function openFolder(target) { openedFolder = target; renderHistoryPanel(); }
+    function closeFolder() { openedFolder = null; renderHistoryPanel(); }
 
     async function deleteSingleFolder(event, idx) {
       event.stopPropagation();
@@ -302,7 +328,6 @@
       const panelTitle = document.getElementById('panelTitle');
       const bestText = document.getElementById('bestLapText');
 
-      // MODE 1: DAFTAR FOLDER (ROOT)
       if (openedFolder === null) {
         breadcrumb.style.display = "none";
         panelTitle.innerText = `FOLDER RACE (${raceFolders.length})`;
@@ -316,27 +341,28 @@
           activeCard.innerHTML = `
             <div>
               <span class="folder-title">🟢 SESI BERJALAN</span>
-              <span class="folder-sub">${activeSessionLaps.length} Lap selesai • ${totalDistKm.toFixed(2)} km</span>
+              <span class="folder-sub">${activeSessionLaps.length} Lap • ${totalDistKm.toFixed(2)} km • ${Math.round(totalEngJoules)} J</span>
             </div>
             <span class="folder-badge" style="color: var(--success); border-color: var(--success);">BUKA ▸</span>`;
           list.appendChild(activeCard);
         }
 
         if (raceFolders.length === 0 && activeSessionLaps.length === 0 && timerSec === 0) {
-          list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Belum ada folder race di Cloud.<br>Hasil race otomatis tersimpan ke semua device setelah alat di-reset.</p>';
+          list.innerHTML = '<p style="color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: 20px;">Belum ada folder race di Cloud.<br>Hasil race otomatis tersimpan setelah alat di-reset.</p>';
           return;
         }
 
         raceFolders.forEach((folder, idx) => {
           const lapsArr = folder.laps || [];
           const label = folder.displayName || folder.name;
+          const jVal = folder.totalJoules !== undefined ? ` • ${Math.round(folder.totalJoules)} J` : '';
           const card = document.createElement('div');
           card.className = "folder-card";
           card.onclick = () => openFolder(idx);
           card.innerHTML = `
             <div>
               <span class="folder-title">📁 ${label}</span>
-              <span class="folder-sub">${folder.dateStr || ''} • ${(folder.totalDist || 0).toFixed(2)} km • Best ${folder.bestStr || '--:--'}</span>
+              <span class="folder-sub">${folder.dateStr || ''} • ${(folder.totalDist || 0).toFixed(2)} km${jVal}</span>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="folder-badge">${lapsArr.length} LAP</span>
@@ -347,7 +373,6 @@
         return;
       }
 
-      // MODE 2: ISI FOLDER (LIST LAP 1, LAP 2, LAP 3...)
       breadcrumb.style.display = "flex";
       panelTitle.innerText = "RIWAYAT PUTARAN";
 
@@ -379,13 +404,14 @@
 
       list.innerHTML = "";
       targetLaps.forEach((data, lapIdx) => {
+        const jouleTxt = data.joules !== undefined ? ` • ${Math.round(data.joules)} J` : '';
         const card = document.createElement('div');
         card.className = `lap-card ${data.best ? 'best' : ''}`;
         card.onclick = () => openModal(lapIdx);
         card.innerHTML = `
           <div class="lap-card-left">
             <span class="lap-title">LAP #${data.lap} ${data.best ? '★' : ''}</span>
-            <span class="lap-sub">${data.avgSpd} km/h • ${(data.distM/1000).toFixed(2)} km • ${data.starts} Stater</span>
+            <span class="lap-sub">${data.avgSpd} km/h • ${(data.distM/1000).toFixed(2)} km${jouleTxt}</span>
           </div>
           <div class="lap-time">${data.timeStr}</div>`;
         list.appendChild(card);
@@ -395,9 +421,7 @@
     function recordStarterFinished() {
       globalStarterCount++;
       document.getElementById('dispStarter').innerText = globalStarterCount;
-      
       const duration = (Date.now() - burnStartTimer) / 1000.0;
-      document.getElementById('dispBurnDur').innerHTML = `${duration.toFixed(1)}<span class="unit">s</span>`;
 
       const idxInLap = currentLapStarters.length + 1;
       const eventData = { 
@@ -408,7 +432,7 @@
 
       const icon = L.divIcon({ className: 'starter-marker', html: idxInLap, iconSize: [20,20], iconAnchor: [10,10] });
       L.marker([burnStartLat, burnStartLon], { icon: icon }).addTo(liveStarterGroup)
-        .bindPopup(`<b>Stater #${idxInLap}</b><br>Akselerasi: ${burnStartSpd.toFixed(1)} ➔ ${maxBurnSpd.toFixed(1)} km/h<br><b>Mesin Nyala: ${duration.toFixed(1)} s</b>`);
+        .bindPopup(`<b>Stater #${idxInLap}</b><br>Akselerasi: ${burnStartSpd.toFixed(1)} ➔ ${maxBurnSpd.toFixed(1)} km/h<br><b>Durasi: ${duration.toFixed(1)} s</b>`);
     }
 
     function finishLap() {
@@ -416,6 +440,8 @@
       lapStartSec = timerSec;
       const lapDist = (totalDistKm - lapStartDistKm) * 1000;
       lapStartDistKm = totalDistKm;
+      const lapJoules = Math.max(0, totalEngJoules - lapStartJoules);
+      lapStartJoules = totalEngJoules;
       const lapAvg = lapDurSec > 0 ? (lapDist / 1000) / (lapDurSec / 3600) : 0;
       
       const isBest = lapDurSec > 0 && lapDurSec < bestLapSec;
@@ -432,6 +458,8 @@
         durSec: lapDurSec,
         timeStr: formatTime(lapDurSec),
         avgSpd: lapAvg.toFixed(1),
+        joules: lapJoules,
+        coastDrag: currentCoastDrag,
         starts: currentLapStarters.length,
         engTime: totalEngSec.toFixed(1),
         distM: Math.round(lapDist),
@@ -440,7 +468,6 @@
         best: isBest
       });
 
-      // Simpan sesi aktif ke Cloud via REST API
       fetch(`${FIREBASE_BASE}/active_session.json`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -464,16 +491,33 @@
       if (!d) return;
 
       const folderLabel = (openedFolder === "ACTIVE") ? "SESI AKTIF" : (raceFolders[openedFolder].displayName || raceFolders[openedFolder].name);
+      currentModalLapData = d;
+      currentModalFolderName = folderLabel;
+
       document.getElementById('mTitle').innerText = `${folderLabel} — LAP #${d.lap}`;
       document.getElementById('mTime').innerText = d.timeStr;
       document.getElementById('mAvg').innerText = `${d.avgSpd} km/h`;
-      document.getElementById('mStarts').innerText = d.starts;
-      document.getElementById('mEngTime').innerText = `${d.engTime} s`;
+      document.getElementById('mJoules').innerText = `${Math.round(d.joules || 0)} J`;
+      document.getElementById('mCoast').innerText = `${(d.coastDrag || 0).toFixed(3)} m/s²`;
 
       const coords = d.coords || [];
       const starters = d.starters || [];
 
-      modalPolyline.setLatLngs(coords);
+      modalHeatmapGroup.clearLayers();
+      const boundsPoints = [];
+      for (let i = 0; i < coords.length; i++) {
+        const pt = coords[i];
+        boundsPoints.push([pt[0], pt[1]]);
+        if (i > 0) {
+          const prev = coords[i - 1];
+          const segSpd = pt[2] !== undefined ? pt[2] : parseFloat(d.avgSpd);
+          L.polyline([[prev[0], prev[1]], [pt[0], pt[1]]], {
+            color: getSpeedColor(segSpd),
+            weight: 4
+          }).addTo(modalHeatmapGroup);
+        }
+      }
+
       modalStarterGroup.clearLayers();
       starters.forEach(s => {
         L.marker([s.lat, s.lon], { icon: L.divIcon({ className: 'starter-marker', html: s.id, iconSize:[20,20] }) })
@@ -481,8 +525,34 @@
       });
 
       document.getElementById('lapModal').style.display = 'flex';
-      setTimeout(() => { modalMap.invalidateSize(); if(coords.length>0) modalMap.fitBounds(modalPolyline.getBounds(), {padding:[20,20]}); }, 250);
+      setTimeout(() => {
+        modalMap.invalidateSize();
+        if (boundsPoints.length > 0) modalMap.fitBounds(L.latLngBounds(boundsPoints), {padding:[20,20]});
+      }, 250);
     }
+
+    function exportCurrentModalCSV() {
+      if (!currentModalLapData) return;
+      const d = currentModalLapData;
+      let csv = "Folder,Lap,Titik_Ke,Latitude,Longitude,Kecepatan_kmh,Avg_Lap_kmh,Energi_Joule,Coast_Drag_ms2\n";
+      const coords = d.coords || [];
+      if (coords.length === 0) {
+        csv += `"${currentModalFolderName}",${d.lap},1,0,0,${d.avgSpd},${d.avgSpd},${d.joules || 0},${d.coastDrag || 0}\n`;
+      } else {
+        coords.forEach((pt, idx) => {
+          const spdVal = pt[2] !== undefined ? pt[2] : d.avgSpd;
+          csv += `"${currentModalFolderName}",${d.lap},${idx + 1},${pt[0]},${pt[1]},${spdVal},${d.avgSpd},${d.joules || 0},${d.coastDrag || 0}\n`;
+        });
+      }
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `VORA_${currentModalFolderName.replace(/\s+/g, '_')}_LAP_${d.lap}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     function closeModal() { document.getElementById('lapModal').style.display = 'none'; }
 
     // ==========================================
@@ -491,35 +561,43 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
-      // 1. HANDLE RESET DARI ALAT
       if (data.cmd === "RACE_RESET") {
         fetch(`${FIREBASE_BASE}/active_session.json`, { method: "DELETE" });
 
         activeSessionLaps = [];
         currentLap = 1; globalStarterCount = 0; timerSec = 0; lapStartSec = 0;
         totalDistKm = 0; lapStartDistKm = 0; bestLapSec = Infinity;
+        totalEngJoules = 0; lapStartJoules = 0; currentCoastDrag = 0;
         currentLapCoords = []; currentLapStarters = [];
         hasLeftStartZone = false;
+        webLowSpeedArmed = false;
+        lastLivePos = null;
+        prevHeadingRad = null;
         
-        document.getElementById('dispSpeed').innerHTML = `0.0<span class="unit">km/h</span>`;
+        const spdEl = document.getElementById('dispSpeed');
+        spdEl.classList.remove('speed-blink-red');
+        spdEl.innerHTML = `0.0<span class="unit">km/h</span>`;
+
         document.getElementById('dispAvgSpeed').innerHTML = `0.0<span class="unit">km/h</span>`;
         document.getElementById('dispTrip').innerHTML = `0.00<span class="unit">km</span>`;
         document.getElementById('dispStarter').innerText = "0";
         document.getElementById('dispLap').innerText = "1";
-        document.getElementById('dispBurnDur').innerHTML = `0.0<span class="unit">s</span>`;
+        document.getElementById('dispEngJoule').innerHTML = `0<span class="unit">J</span>`;
+        document.getElementById('dispCoastDrag').innerHTML = `0.00<span class="unit">m/s²</span>`;
+        document.getElementById('dispRollMargin').innerHTML = `100<span class="unit">%</span>`;
         
         const timerEl = document.getElementById('dispTimer');
         timerEl.innerText = "00:00";
         timerEl.style.color = "var(--accent)";
 
         liveStarterGroup.clearLayers();
-        livePolyline.setLatLngs([]);
+        liveHeatmapGroup.clearLayers();
         if (startCircle) { liveMap.removeLayer(startCircle); startCircle = null; }
         startLocked = false;
 
         openedFolder = null;
         renderHistoryPanel();
-        setTimeout(() => { lastCloudFingerprint = ""; syncFromCloud(); }, 1500);
+        setTimeout(() => { lastCloudFingerprint = ""; syncFromCloud(); }, 1800);
         
         if (data.start_lat && data.start_lon) {
           startLat = parseFloat(data.start_lat); startLon = parseFloat(data.start_lon); startLocked = true;
@@ -530,7 +608,6 @@
         return;
       }
 
-      // 2. SINKRONISASI TIMER LANGSUNG DARI ESP32
       if (data.time !== undefined) {
         timerSec = parseInt(data.time) || 0;
         const timerEl = document.getElementById('dispTimer');
@@ -539,14 +616,26 @@
         else if (data.t_state === 1) timerEl.style.color = "var(--warning)";
         else timerEl.style.color = "var(--accent)";
       }
+      if (data.lap !== undefined) {
+        document.getElementById('dispLap').innerText = parseInt(data.lap) || 1;
+      }
 
-      // 3. HANDLE DATA NORMAL
       const spd = parseFloat(data.spd) || 0; 
       const lat = parseFloat(data.lat) || 0; 
       const lon = parseFloat(data.lon) || 0;
       totalDistKm = parseFloat(data.trip) || 0;
+
+      if (spd > 20.0) webLowSpeedArmed = true;
       
-      document.getElementById('dispSpeed').innerHTML = `${spd.toFixed(1)}<span class="unit">km/h</span>`;
+      const spdEl = document.getElementById('dispSpeed');
+      spdEl.innerHTML = `${spd.toFixed(1)}<span class="unit">km/h</span>`;
+
+      if (webLowSpeedArmed && spd < 14.0) {
+        spdEl.classList.add('speed-blink-red');
+      } else {
+        spdEl.classList.remove('speed-blink-red');
+      }
+
       document.getElementById('dispTrip').innerHTML = `${totalDistKm.toFixed(2)}<span class="unit">km</span>`;
       document.getElementById('dispBatt').innerHTML = `${parseInt(data.batt) || 0}<span class="unit">%</span>`;
 
@@ -557,6 +646,16 @@
         engEl.style.color = (engV > 0 && engV < 11.8) ? 'var(--danger)' : 'var(--warning)';
       }
 
+      if (data.ejoule !== undefined) {
+        totalEngJoules = parseFloat(data.ejoule) || 0;
+        document.getElementById('dispEngJoule').innerHTML = `${Math.round(totalEngJoules)}<span class="unit">J</span>`;
+      }
+
+      if (data.cdrag !== undefined) {
+        currentCoastDrag = parseFloat(data.cdrag) || 0;
+        document.getElementById('dispCoastDrag').innerHTML = `${currentCoastDrag.toFixed(2)}<span class="unit">m/s²</span>`;
+      }
+
       if (timerSec > 5 && totalDistKm > 0.01) {
         const avg = totalDistKm / (timerSec / 3600);
         const aEl = document.getElementById('dispAvgSpeed');
@@ -564,7 +663,7 @@
         aEl.style.color = avg >= 25.0 ? 'var(--success)' : 'var(--danger)';
       }
 
-      // 4. LOGIKA DURASI ENGINE BURN
+      // Burn Detection
       if (engineState === "COASTING" && spd > 19.0) {
         engineState = "BURNING"; burnStartTimer = Date.now(); maxBurnSpd = spd;
         burnStartLat = lat; burnStartLon = lon; burnStartSpd = spd;
@@ -576,21 +675,50 @@
         }
       }
 
-      // 5. TRACKING PETA & DETEKSI LAP (HANYA AKTIF JIKA RODA BERPUTAR > 1.5 KM/H)
+      // Tracking Peta (Speed Heatmap), Rollover Margin, & Deteksi Lap
       if (lat !== 0 && lon !== 0) {
         const pos = [lat, lon];
 
         if (currentLapCoords.length === 0 && spd <= 1.5) {
           carMarker.setLatLng(pos);
           liveMap.panTo(pos);
+          lastLivePos = pos;
         }
 
         if (spd <= 1.5) return;
 
+        // Hitung Rollover Margin dari kecepatan roda & perubahan arah gerak GPS
+        if (lastLivePos) {
+          const stepDist = getDist(lastLivePos[0], lastLivePos[1], lat, lon);
+          if (stepDist > 1.5) {
+            const heading = getBearingRad(lastLivePos[0], lastLivePos[1], lat, lon);
+            const nowMs = Date.now();
+            if (prevHeadingRad !== null && prevHeadingTimeMs > 0) {
+              let dHeading = heading - prevHeadingRad;
+              while (dHeading > Math.PI) dHeading -= 2 * Math.PI;
+              while (dHeading < -Math.PI) dHeading += 2 * Math.PI;
+              const dt = (nowMs - prevHeadingTimeMs) / 1000.0;
+              if (dt > 0.1 && dt < 5.0) {
+                const yawRate = Math.abs(dHeading) / dt;
+                const latG = ((spd / 3.6) * yawRate) / 9.81;
+                const marginPct = Math.max(0, Math.min(100, Math.round((1.0 - (latG / CRITICAL_LATERAL_G)) * 100)));
+                const rmEl = document.getElementById('dispRollMargin');
+                rmEl.innerHTML = `${marginPct}<span class="unit">%</span>`;
+                rmEl.style.color = marginPct < 35 ? 'var(--danger)' : (marginPct < 60 ? 'var(--warning)' : 'var(--success)');
+              }
+            }
+            prevHeadingRad = heading;
+            prevHeadingTimeMs = nowMs;
+          }
+
+          // Gambar segmen garis berwarna sesuai kecepatan (Speed Heatmap)
+          L.polyline([lastLivePos, pos], { color: getSpeedColor(spd), weight: 4 }).addTo(liveHeatmapGroup);
+        }
+
+        lastLivePos = pos;
         carMarker.setLatLng(pos);
-        livePolyline.addLatLng(pos);
         liveMap.panTo(pos);
-        currentLapCoords.push(pos);
+        currentLapCoords.push([lat, lon, spd]);
 
         if (!startLocked && spd > 3.0) {
           startLat = lat; startLon = lon; startLocked = true;
@@ -604,9 +732,7 @@
           const distFromStart = getDist(lat, lon, startLat, startLon);
           const currentLapDistM = (totalDistKm - lapStartDistKm) * 1000;
 
-          if (distFromStart > GATE_RADIUS_M + 15) {
-            hasLeftStartZone = true;
-          }
+          if (distFromStart > GATE_RADIUS_M + 15) hasLeftStartZone = true;
 
           if (
             hasLeftStartZone &&
