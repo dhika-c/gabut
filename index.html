@@ -35,13 +35,13 @@
       color: var(--danger) !important;
     }
 
-    /* Metrik Atas */
+    /* Metrik Atas (12 Parameter) */
     .grid-metrics {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; margin-bottom: 15px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 15px;
     }
-    .card { background: var(--card); padding: 10px 10px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
+    .card { background: var(--card); padding: 10px 8px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
     .card h4 { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
-    .card .val { font-size: 1.45rem; font-weight: 800; color: var(--accent); }
+    .card .val { font-size: 1.4rem; font-weight: 800; color: var(--accent); }
     .card .unit { font-size: 0.72rem; color: var(--muted); margin-left: 2px; }
 
     /* Layout Utama */
@@ -103,7 +103,7 @@
     <div id="connStatus" class="status-badge disconnected">DISCONNECTED</div>
   </header>
 
-  <!-- Metrik Top (11 Parameter Lengkap) -->
+  <!-- Metrik Top (12 Parameter Lengkap termasuk Ampere & Joule) -->
   <div class="grid-metrics">
     <div class="card"><h4>Kecepatan</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
     <div class="card"><h4>Avg Pace</h4><div class="val" id="dispAvgSpeed" style="color: var(--success);">0.0<span class="unit">km/h</span></div></div>
@@ -111,6 +111,7 @@
     <div class="card"><h4>Waktu Balap</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
     <div class="card"><h4>Lap Berjalan</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
     <div class="card"><h4>Baterai Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
+    <div class="card"><h4>Arus Engine</h4><div class="val" id="dispEngAmp" style="color: var(--warning);">0.00<span class="unit">A</span></div></div>
     <div class="card"><h4>Energi Engine</h4><div class="val" id="dispEngJoule" style="color: var(--warning);">0<span class="unit">J</span></div></div>
     <div class="card"><h4>Coast Drag</h4><div class="val" id="dispCoastDrag" style="color: var(--purple);">0.00<span class="unit">m/s²</span></div></div>
     <div class="card"><h4>Roll Margin</h4><div class="val" id="dispRollMargin" style="color: var(--success);">100<span class="unit">%</span></div></div>
@@ -162,14 +163,7 @@
   </div>
 
   <script>
-    // ==========================================
-    // 0. URL FIREBASE REST API
-    // ==========================================
     const FIREBASE_BASE = "https://vora-cj-default-rtdb.asia-southeast1.firebasedatabase.app/vora_cakra";
-
-    // ==========================================
-    // 1. INIT LEAFLET MAPS & SPEED HEATMAP
-    // ==========================================
     const DEFAULT_COORD = [-7.53215, 111.45892];
     
     const liveMap = L.map('liveMap').setView(DEFAULT_COORD, 17);
@@ -186,9 +180,9 @@
     let currentModalFolderName = "";
 
     function getSpeedColor(spd) {
-      if (spd < 15.0) return '#ef4444'; // Merah (Pelan / Siap Burn)
-      if (spd <= 25.0) return '#facc15'; // Kuning (Cruising)
-      return '#22c55e'; // Hijau (High Momentum)
+      if (spd < 15.0) return '#ef4444';
+      if (spd <= 25.0) return '#facc15';
+      return '#22c55e';
     }
 
     function initModal() {
@@ -200,26 +194,19 @@
       }
     }
 
-    // ==========================================
-    // 2. LOGIKA KMHE, ROLLOVER MARGIN & CLOUD SYNC
-    // ==========================================
     let currentLap = 1, globalStarterCount = 0;
     let timerSec = 0;
     let lapStartSec = 0, totalDistKm = 0.0, lapStartDistKm = 0.0, bestLapSec = Infinity;
     let totalEngJoules = 0.0, lapStartJoules = 0.0, currentCoastDrag = 0.0;
 
-    // Parameter Sasis Roda Tiga (Track 550mm, CoG 200mm -> Critical Lateral G = 1.375 G)
     const CRITICAL_LATERAL_G = 1.375;
     let prevHeadingRad = null, prevHeadingTimeMs = 0;
-
     let webLowSpeedArmed = false;
 
-    // Burn Logika
     let engineState = "COASTING";
     let burnStartTimer = 0, maxBurnSpd = 0;
     let burnStartLat = 0, burnStartLon = 0, burnStartSpd = 0;
     
-    // Geofence & Anti-Drift Logika
     let startLat = null, startLon = null, startLocked = false;
     let hasLeftStartZone = false;
     let lastLapTimestamp = 0;
@@ -229,7 +216,7 @@
 
     let raceFolders = [];
     let activeSessionLaps = [];
-    let currentLapCoords = []; // Menyimpan [lat, lon, spd, joules, coastDrag]
+    let currentLapCoords = [];
     let currentLapStarters = [];
     let lastCloudFingerprint = "";
     let openedFolder = null;
@@ -555,9 +542,6 @@
 
     function closeModal() { document.getElementById('lapModal').style.display = 'none'; }
 
-    // ==========================================
-    // 3. MQTT INGESTION & DATA LOGIC
-    // ==========================================
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
@@ -582,6 +566,7 @@
         document.getElementById('dispTrip').innerHTML = `0.00<span class="unit">km</span>`;
         document.getElementById('dispStarter').innerText = "0";
         document.getElementById('dispLap').innerText = "1";
+        document.getElementById('dispEngAmp').innerHTML = `0.00<span class="unit">A</span>`;
         document.getElementById('dispEngJoule').innerHTML = `0<span class="unit">J</span>`;
         document.getElementById('dispCoastDrag').innerHTML = `0.00<span class="unit">m/s²</span>`;
         document.getElementById('dispRollMargin').innerHTML = `100<span class="unit">%</span>`;
@@ -646,6 +631,11 @@
         engEl.style.color = (engV > 0 && engV < 11.8) ? 'var(--danger)' : 'var(--warning)';
       }
 
+      if (data.ema !== undefined) {
+        const engAmp = (parseFloat(data.ema) || 0) / 1000.0;
+        document.getElementById('dispEngAmp').innerHTML = `${engAmp.toFixed(2)}<span class="unit">A</span>`;
+      }
+
       if (data.ejoule !== undefined) {
         totalEngJoules = parseFloat(data.ejoule) || 0;
         document.getElementById('dispEngJoule').innerHTML = `${Math.round(totalEngJoules)}<span class="unit">J</span>`;
@@ -687,7 +677,6 @@
 
         if (spd <= 1.5) return;
 
-        // Hitung Rollover Margin dari kecepatan roda & perubahan arah gerak GPS
         if (lastLivePos) {
           const stepDist = getDist(lastLivePos[0], lastLivePos[1], lat, lon);
           if (stepDist > 1.5) {
@@ -711,7 +700,6 @@
             prevHeadingTimeMs = nowMs;
           }
 
-          // Gambar segmen garis berwarna sesuai kecepatan (Speed Heatmap)
           L.polyline([lastLivePos, pos], { color: getSpeedColor(spd), weight: 4 }).addTo(liveHeatmapGroup);
         }
 
