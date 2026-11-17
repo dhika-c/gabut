@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VORA Telemetry - Cakra Jagad</title>
+  <title>VORA Telemetry</title>
   
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -105,34 +105,34 @@
 
   <!-- Metrik Top (12 Parameter Lengkap termasuk Ampere & Joule) -->
   <div class="grid-metrics">
-    <div class="card"><h4>Kecepatan</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
+    <div class="card"><h4>Speed</h4><div class="val" id="dispSpeed">0.0<span class="unit">km/h</span></div></div>
     <div class="card"><h4>Avg Pace</h4><div class="val" id="dispAvgSpeed" style="color: var(--success);">0.0<span class="unit">km/h</span></div></div>
-    <div class="card"><h4>Jarak Total</h4><div class="val" id="dispTrip">0.00<span class="unit">km</span></div></div>
-    <div class="card"><h4>Waktu Balap</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
-    <div class="card"><h4>Lap Berjalan</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
-    <div class="card"><h4>Baterai Engine</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
-    <div class="card"><h4>Arus Engine</h4><div class="val" id="dispEngAmp" style="color: var(--warning);">0.00<span class="unit">A</span></div></div>
-    <div class="card"><h4>Energi Engine</h4><div class="val" id="dispEngJoule" style="color: var(--warning);">0<span class="unit">J</span></div></div>
+    <div class="card"><h4>Distance</h4><div class="val" id="dispTrip">0.00<span class="unit">km</span></div></div>
+    <div class="card"><h4>Race Time</h4><div class="val" id="dispTimer" style="font-family: monospace;">00:00</div></div>
+    <div class="card"><h4>Current Lap</h4><div class="val" id="dispLap" style="color: var(--accent);">1</div></div>
+    <div class="card"><h4>Main Battery</h4><div class="val" id="dispEngBatt" style="color: var(--warning);">0.0<span class="unit">V</span></div></div>
+    <div class="card"><h4>Battery Current</h4><div class="val" id="dispEngAmp" style="color: var(--warning);">0.00<span class="unit">A</span></div></div>
+    <div class="card"><h4>Battery Energy</h4><div class="val" id="dispEngJoule" style="color: var(--warning);">0<span class="unit">J</span></div></div>
     <div class="card"><h4>Coast Drag</h4><div class="val" id="dispCoastDrag" style="color: var(--purple);">0.00<span class="unit">m/s²</span></div></div>
     <div class="card"><h4>Roll Margin</h4><div class="val" id="dispRollMargin" style="color: var(--success);">100<span class="unit">%</span></div></div>
-    <div class="card"><h4>Total Stater</h4><div class="val" id="dispStarter" style="color: var(--warning);">0</div></div>
-    <div class="card"><h4>Baterai Alat</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
+    <div class="card"><h4>Total Starts</h4><div class="val" id="dispStarter" style="color: var(--warning);">0</div></div>
+    <div class="card"><h4>Display Baterai</h4><div class="val" id="dispBatt">0<span class="unit">%</span></div></div>
   </div>
 
   <div class="main-layout">
     <div id="liveMap"></div>
     <div class="lap-feed">
       <div class="lap-feed-header">
-        <span id="panelTitle">FOLDER DATA RACE</span>
+        <span id="panelTitle">RACE LOGS FOLDER</span>
         <div class="header-actions">
           <span id="bestLapText" style="color: var(--purple); font-size: 0.78rem;">BEST: --:--</span>
-          <button id="btnClearAll" class="btn-sm btn-danger" onclick="clearAllFolders()">HAPUS</button>
+          <button id="btnClearAll" class="btn-sm btn-danger" onclick="clearAllFolders()">DELETE</button>
         </div>
       </div>
 
       <div id="folderBreadcrumb" class="folder-breadcrumb" style="display: none;">
         <button class="btn-sm" onclick="closeFolder()">← FOLDER</button>
-        <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">SESI BERJALAN</span>
+        <span id="openedFolderName" style="font-weight: bold; color: var(--accent);">LIVE SESSION</span>
       </div>
 
       <div id="lapList" class="lap-list"></div>
@@ -144,7 +144,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <div>
-          <h3 id="mTitle" style="color: var(--accent);">ANALISIS SPASIAL LAP #1</h3>
+          <h3 id="mTitle" style="color: var(--accent);">SPATIAL LAP ANALYSIS #1</h3>
           <p style="font-size: 0.75rem; color: var(--muted);">Speed Heatmap (Merah &lt;15 | Kuning 15-25 | Hijau &gt;25 km/h)</p>
         </div>
         <div style="display: flex; gap: 8px;">
@@ -156,7 +156,7 @@
       <div class="modal-stats-grid">
         <div class="m-stat">Lap Time<b id="mTime">--:--</b></div>
         <div class="m-stat">Avg Speed<b id="mAvg">-- km/h</b></div>
-        <div class="m-stat">Energi Listrik<b id="mJoules" style="color: var(--warning);">0 J</b></div>
+        <div class="m-stat">Electric Energy<b id="mJoules" style="color: var(--warning);">0 J</b></div>
         <div class="m-stat">Coast Drag<b id="mCoast" style="color: var(--purple);">0.00 m/s²</b></div>
       </div>
     </div>
