@@ -25,6 +25,7 @@
     .status-badge { padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 0.8rem; }
     .connected { background-color: var(--success); color: #000; }
     .disconnected { background-color: var(--danger); color: #fff; }
+    .waiting { background-color: var(--warning); color: #000; }
 
     @keyframes blinkRed {
       0%, 100% { color: var(--danger); opacity: 1; }
@@ -221,6 +222,17 @@
     let lastCloudFingerprint = "";
     let openedFolder = null;
 
+    // Status Deteksi Kehadiran Mobil (Heartbeat)
+    let lastPacketTime = 0;
+    let isBrokerConnected = false;
+
+    function markCarOnline() {
+      lastPacketTime = Date.now();
+      const badge = document.getElementById('connStatus');
+      badge.className = "status-badge connected";
+      badge.innerText = "LIVE PADDOCK";
+    }
+
     const formatTime = (sec) => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
     function getDist(lat1, lon1, lat2, lon2) {
       const R = 6371e3, r = Math.PI/180;
@@ -317,7 +329,7 @@
 
       if (openedFolder === null) {
         breadcrumb.style.display = "none";
-        panelTitle.innerText = `FOLDER RACE (${raceFolders.length})`;
+        panelTitle.innerText = `RACE LOGS FOLDER (${raceFolders.length})`;
         bestText.innerText = "";
         list.innerHTML = "";
 
@@ -327,7 +339,7 @@
           activeCard.onclick = () => openFolder("ACTIVE");
           activeCard.innerHTML = `
             <div>
-              <span class="folder-title">🟢 SESI BERJALAN</span>
+              <span class="folder-title">🟢 LIVE SESSION</span>
               <span class="folder-sub">${activeSessionLaps.length} Lap • ${totalDistKm.toFixed(2)} km • ${Math.round(totalEngJoules)} J</span>
             </div>
             <span class="folder-badge" style="color: var(--success); border-color: var(--success);">BUKA ▸</span>`;
@@ -361,13 +373,13 @@
       }
 
       breadcrumb.style.display = "flex";
-      panelTitle.innerText = "RIWAYAT PUTARAN";
+      panelTitle.innerText = "LAP HISTORY";
 
       let targetLaps = [];
       let folderBestStr = "--:--";
 
       if (openedFolder === "ACTIVE") {
-        folderNameEl.innerText = "🟢 SESI BERJALAN";
+        folderNameEl.innerText = "🟢 LIVE SESSION";
         targetLaps = activeSessionLaps;
         folderBestStr = bestLapSec !== Infinity ? formatTime(bestLapSec) : "--:--";
       } else if (raceFolders[openedFolder]) {
@@ -477,7 +489,7 @@
       const d = sourceLaps[lapIdx];
       if (!d) return;
 
-      const folderLabel = (openedFolder === "ACTIVE") ? "SESI AKTIF" : (raceFolders[openedFolder].displayName || raceFolders[openedFolder].name);
+      const folderLabel = (openedFolder === "ACTIVE") ? "LIVE SESSION" : (raceFolders[openedFolder].displayName || raceFolders[openedFolder].name);
       currentModalLapData = d;
       currentModalFolderName = folderLabel;
 
@@ -545,6 +557,8 @@
     const broker = "broker.hivemq.com", port = 8884, topic = "CJ telemetri";
     
     function processTelemetry(data) {
+      markCarOnline(); // Tandai mobil aktif setiap kali paket data masuk
+
       if (data.cmd === "RACE_RESET") {
         fetch(`${FIREBASE_BASE}/active_session.json`, { method: "DELETE" });
 
@@ -739,8 +753,10 @@
     const client = new Paho.MQTT.Client(broker, Number(port), "/mqtt", "dash_" + Math.random().toString(16).substr(2,6));
     
     client.onConnectionLost = () => { 
-      document.getElementById('connStatus').className = "status-badge disconnected"; 
-      document.getElementById('connStatus').innerText = "DISCONNECTED"; 
+      isBrokerConnected = false;
+      const badge = document.getElementById('connStatus');
+      badge.className = "status-badge disconnected"; 
+      badge.innerText = "DISCONNECTED"; 
       setTimeout(connect, 3000); 
     };
     
@@ -757,17 +773,30 @@
         useSSL: true,
         timeout: 5,
         onSuccess: () => { 
-          document.getElementById('connStatus').className = "status-badge connected"; 
-          document.getElementById('connStatus').innerText = "LIVE PADDOCK"; 
+          isBrokerConnected = true;
+          const badge = document.getElementById('connStatus');
+          badge.className = "status-badge waiting"; 
+          badge.innerText = "WAITING CAR..."; 
           client.subscribe(topic); 
         }, 
         onFailure: () => { 
-          document.getElementById('connStatus').className = "status-badge disconnected"; 
-          document.getElementById('connStatus').innerText = "RECONNECTING..."; 
+          isBrokerConnected = false;
+          const badge = document.getElementById('connStatus');
+          badge.className = "status-badge disconnected"; 
+          badge.innerText = "RECONNECTING..."; 
           setTimeout(connect, 3000); 
         }
       }); 
     }
+
+    // Ubah lencana menjadi CAR OFFLINE jika tidak ada paket dari ESP32 > 3 detik
+    setInterval(() => {
+      if (isBrokerConnected && lastPacketTime > 0 && (Date.now() - lastPacketTime > 3000)) {
+        const badge = document.getElementById('connStatus');
+        badge.className = "status-badge waiting";
+        badge.innerText = "CAR OFFLINE";
+      }
+    }, 1000);
 
     connect();
   </script>
